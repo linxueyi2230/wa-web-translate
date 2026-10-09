@@ -1,5 +1,6 @@
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { languageLabel } from '@/shared/languages';
 import { loadConfig, saveConfig } from '@/shared/storage';
 import type { Config } from '@/shared/types';
 import './styles.css';
@@ -26,8 +27,12 @@ function PopupApp() {
         <span>{config.provider}</span>
       </div>
       <div className="popup-row">
-        <span>Native</span>
-        <span>{config.nativeLang}</span>
+        <span>我的母语</span>
+        <span>{languageLabel(config.nativeLang)}</span>
+      </div>
+      <div className="popup-row">
+        <span>对方的母语</span>
+        <span>{languageLabel(config.targetLang)}</span>
       </div>
       <label className="popup-toggle">
         <input

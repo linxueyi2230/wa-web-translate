@@ -15,6 +15,7 @@ export class ProviderError extends Error {
 export interface CallArgs {
   system: string;
   user: string;
+  requestId?: string;
 }
 
 export async function callModel(config: Config, args: CallArgs): Promise<string> {
@@ -23,18 +24,56 @@ export async function callModel(config: Config, args: CallArgs): Promise<string>
   if (!apiKey) throw new MissingApiKeyError(provider);
   const model = config.model[provider] ?? defaultModel(provider);
 
-  switch (provider) {
-    case 'anthropic':
-      return callAnthropic(apiKey, model, args);
-    case 'openai':
-      return callOpenAI(apiKey, model, args);
-    case 'google':
-      return callGoogle(apiKey, model, args);
+  const startedAt = performance.now();
+  console.info('[wa-translate][provider] request start', {
+    requestId: args.requestId,
+    provider,
+    model,
+    systemChars: args.system.length,
+    userChars: args.user.length,
+  });
+
+  try {
+    let output: string;
+    switch (provider) {
+      case 'deepseek':
+        output = await callDeepseek(apiKey, model, args);
+        break;
+      case 'anthropic':
+        output = await callAnthropic(apiKey, model, args);
+        break;
+      case 'openai':
+        output = await callOpenAI(apiKey, model, args);
+        break;
+      case 'google':
+        output = await callGoogle(apiKey, model, args);
+        break;
+    }
+    console.info('[wa-translate][provider] request success', {
+      requestId: args.requestId,
+      provider,
+      model,
+      outputChars: output.length,
+      elapsedMs: elapsedMs(startedAt),
+    });
+    return output;
+  } catch (err) {
+    console.error('[wa-translate][provider] request failed', {
+      requestId: args.requestId,
+      provider,
+      model,
+      elapsedMs: elapsedMs(startedAt),
+      error: err instanceof Error ? err.message : String(err),
+      status: err instanceof ProviderError ? err.status : undefined,
+    });
+    throw err;
   }
 }
 
 function defaultModel(provider: Provider): string {
   switch (provider) {
+    case 'deepseek':
+      return 'deepseek-flash';
     case 'anthropic':
       return 'claude-sonnet-4-6';
     case 'openai':
@@ -42,6 +81,42 @@ function defaultModel(provider: Provider): string {
     case 'google':
       return 'gemini-2.0-flash';
   }
+}
+
+async function callDeepseek(apiKey: string, model: string, args: CallArgs): Promise<string> {
+  const startedAt = performance.now();
+  const res = await fetch('https://api.deepseek.com/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: 'system', content: args.system },
+        { role: 'user', content: args.user },
+      ],
+      "thinking": {"type": "enabled"},
+      "reasoning_effort": "high",
+      "stream": false
+    }),
+  });
+  console.info('[wa-translate][provider] DeepSeek response', {
+    requestId: args.requestId,
+    status: res.status,
+    ok: res.ok,
+    elapsedMs: elapsedMs(startedAt),
+  });
+  if (!res.ok) throw new ProviderError('deepseek', res.status, await safeText(res));
+  const data: any = await res.json();
+  const output = String(data?.choices?.[0]?.message?.content ?? '');
+  console.info('[wa-translate][provider] DeepSeek output parsed', {
+    requestId: args.requestId,
+    outputChars: output.length,
+    finishReason: data?.choices?.[0]?.finish_reason,
+  });
+  return output;
 }
 
 async function callAnthropic(apiKey: string, model: string, args: CallArgs): Promise<string> {
@@ -111,4 +186,8 @@ async function safeText(res: Response): Promise<string> {
   } catch {
     return '';
   }
+}
+
+function elapsedMs(startedAt: number): number {
+  return Math.round(performance.now() - startedAt);
 }

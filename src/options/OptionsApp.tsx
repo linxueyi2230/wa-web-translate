@@ -4,6 +4,7 @@ import { DEFAULT_CONFIG, type Config, type Provider } from '@/shared/types';
 import { loadConfig, saveConfig } from '@/shared/storage';
 
 const PROVIDERS: { id: Provider; label: string; keyHint: string }[] = [
+  { id: 'deepseek', label: 'deepseek', keyHint: 'sk-...' },
   { id: 'anthropic', label: 'Anthropic (Claude)', keyHint: 'sk-ant-...' },
   { id: 'openai', label: 'OpenAI (GPT)', keyHint: 'sk-...' },
   { id: 'google', label: 'Google (Gemini)', keyHint: 'AIza...' },
@@ -46,9 +47,9 @@ export function OptionsApp() {
       <p className="opts-sub">AI translation for WhatsApp Web. Settings save automatically.</p>
 
       <section className="opts-section">
-        <h2>Native language</h2>
+        <h2>Language settings</h2>
         <div className="opts-row">
-          <label htmlFor="native-lang">Your native (source) language</label>
+          <label htmlFor="native-lang">我的母语</label>
           <select
             id="native-lang"
             value={config.nativeLang}
@@ -62,6 +63,23 @@ export function OptionsApp() {
           </select>
           <div className="opts-help">
             Used as the source for outbound translation. Inbound messages always auto-detect.
+          </div>
+        </div>
+        <div className="opts-row">
+          <label htmlFor="target-lang">对方的母语</label>
+          <select
+            id="target-lang"
+            value={config.targetLang}
+            onChange={(e) => setAndSave({ targetLang: e.target.value })}
+          >
+            {LANGUAGES.map((l) => (
+              <option key={l.code} value={l.code}>
+                {l.native} ({l.name})
+              </option>
+            ))}
+          </select>
+          <div className="opts-help">
+            Outgoing messages are translated into this language. Incoming messages are translated into 我的母语.
           </div>
         </div>
       </section>
@@ -120,24 +138,6 @@ export function OptionsApp() {
           <div className="opts-help">
             Applied as a system prompt. E.g. "Match the casual tone of the source. Use UK spelling."
           </div>
-        </div>
-      </section>
-
-      <section className="opts-section">
-        <h2>Send mode</h2>
-        <div className="opts-toggle">
-          <input
-            id="send-both"
-            type="checkbox"
-            checked={config.sendBoth}
-            onChange={(e) => setAndSave({ sendBoth: e.target.checked })}
-          />
-          <label htmlFor="send-both">
-            Include the original below the translation when sending
-          </label>
-        </div>
-        <div className="opts-help">
-          Format: <code>{'<lang>: <translation>\\n-----\\n<lang>: <original>'}</code>
         </div>
       </section>
 

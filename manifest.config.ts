@@ -14,6 +14,7 @@ export default defineManifest({
   permissions: ['storage'],
   host_permissions: [
     'https://web.whatsapp.com/*',
+    'https://api.deepseek.com/*',
     'https://api.anthropic.com/*',
     'https://api.openai.com/*',
     'https://generativelanguage.googleapis.com/*',

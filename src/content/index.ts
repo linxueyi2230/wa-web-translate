@@ -6,13 +6,19 @@
 import type { RpcMessage } from '@/shared/messages';
 import { TAG } from '@/shared/messages';
 import {
-  loadChatLangs,
   loadConfig,
-  setChatLang,
-  watchChatLangs,
   watchConfig,
 } from '@/shared/storage';
-import type { ChatLangMap, Config } from '@/shared/types';
+import type { Config } from '@/shared/types';
+import { translate } from '@/page/bridge';
+import { MessageTranslations } from './message-translations';
+import { injectStyles } from '@/page/ui/styles';
+
+// DOM annotations live in the isolated content script: originals never become
+// part of WhatsApp's message model, encrypted payload, quoted reply, or search index.
+injectStyles();
+const history = new MessageTranslations(translate);
+history.start();
 
 // `__PAGE_BUNDLE_URL__` is a placeholder. The post-build Vite plugin replaces it with
 // the bundled MAIN-world entry path (e.g. `assets/index.ts-XXX.js`).
@@ -42,11 +48,16 @@ let port: chrome.runtime.Port | null = null;
 function connect(): chrome.runtime.Port {
   const p = chrome.runtime.connect({ name: 'wa-translate' });
   p.onMessage.addListener((msg: RpcMessage) => {
+    console.info('[wa-translate][content] response from service worker', {
+      requestId: msg.id,
+      ok: msg.kind === 'TRANSLATE_RESULT' && msg.ok,
+    });
     try {
       window.postMessage(msg, '*');
     } catch {}
   });
   p.onDisconnect.addListener(() => {
+    console.warn('[wa-translate][content] service-worker port disconnected');
     if (port === p) port = null;
   });
   return p;
@@ -61,6 +72,9 @@ function postToSw(rpc: RpcMessage): void {
   // Try once on the cached port; if it's dead, reconnect and retry.
   try {
     getPort().postMessage(rpc);
+    console.info('[wa-translate][content] request forwarded to service worker', {
+      requestId: rpc.id,
+    });
     return;
   } catch {
     port = null;
@@ -100,27 +114,26 @@ window.addEventListener('pagehide', () => {
 
 // --- Store proxy: page world cannot use chrome.* directly. ---
 
-function pushStore(patch: { config?: Config; chatLangs?: ChatLangMap }) {
+function pushStore(patch: { config?: Config }) {
   window.postMessage({ __waTransStore: true, kind: 'STORE_PUSH', ...patch }, '*');
 }
 
 async function pushSnapshot() {
-  const [config, chatLangs] = await Promise.all([loadConfig(), loadChatLangs()]);
-  pushStore({ config, chatLangs });
+  const config = await loadConfig();
+  history.setConfig(config);
+  pushStore({ config });
 }
 
 function handleStoreMsg(data: Record<string, unknown>) {
   if (data.kind === 'STORE_REQUEST') {
     pushSnapshot();
-  } else if (data.kind === 'STORE_SET_CHAT_LANG') {
-    const chatId = String(data.chatId);
-    const lang = data.lang == null ? null : String(data.lang);
-    setChatLang(chatId, lang);
   }
 }
 
-watchConfig((config) => pushStore({ config }));
-watchChatLangs((chatLangs) => pushStore({ chatLangs }));
+watchConfig((config) => {
+  history.setConfig(config);
+  pushStore({ config });
+});
 
 // Initial push as soon as the page world is ready (it'll call STORE_REQUEST too,
 // but this keeps the warm-up path short).

@@ -4,35 +4,24 @@
 import { waitTillReady, waitForModules } from './wa';
 import { installWamScrub } from './hooks/wam-scrub';
 import { installSendHook } from './hooks/send';
-import { installComposerObserver } from './hooks/composer';
-import { installDecryptHook } from './hooks/incoming-decrypt';
-import { installAttachMenuItem } from './hooks/attach-menu';
-import { mountUI } from './ui/mount';
 import { requestSnapshot } from './store';
+import { installMessageMetadata } from './message-metadata';
 
 // Modules our hooks depend on. Most of these are lazy-loaded by WhatsApp after the user
 // authenticates and opens a chat for the first time, so we wait for them before binding
 // the hooks (otherwise window.require returns undefined and the hooks no-op).
 const REQUIRED_MODULES = [
-  'react',
-  'WAWebChatCollection',
   'WAWebSendTextMsgChatAction',
-  'WAWebMsgProcessingDecryptEnc',
-  'WAWebAttachMenuPopup.react',
-  'WAWebAttachMenuPopupItem.react',
-  'WDSMenu.react',
-  'WDSIconIcLanguage.react',
-  'WAWebWamCodegenUtils',
 ];
 
 console.info('[wa-translate] page-world script booted');
 
 (async () => {
-  // The DOM-based observers and the modal/picker UI don't need WA's modules — mount them
-  // immediately so the user sees responsive UI as soon as WhatsApp's chat list renders.
+  // Typing must NOT trigger translations or mount a composer preview. The content
+  // script decorates message history; this hook translates only when WA sends.
   requestSnapshot();
-  mountUI();
-  installComposerObserver();
+  installMessageMetadata();
+  console.info('[wa-translate] translation mode: send and message history only');
 
   // Try the scrub as early as possible; retry until WhatsApp's WAM module is loaded.
   let scrubbed = installWamScrub();
@@ -52,7 +41,5 @@ console.info('[wa-translate] page-world script booted');
   if (!scrubbed) console.warn('[wa-translate] wam scrub could not install (module not found)');
 
   installSendHook();
-  installAttachMenuItem();
-  installDecryptHook();
   console.info('[wa-translate] ready');
 })();
