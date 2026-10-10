@@ -6,6 +6,7 @@ import { installWamScrub } from './hooks/wam-scrub';
 import { installSendHook } from './hooks/send';
 import { requestSnapshot } from './store';
 import { installMessageMetadata } from './message-metadata';
+import { installBusinessAdapter } from './business-adapter';
 
 // Modules our hooks depend on. Most of these are lazy-loaded by WhatsApp after the user
 // authenticates and opens a chat for the first time, so we wait for them before binding
@@ -41,5 +42,6 @@ console.info('[wa-translate] page-world script booted');
   if (!scrubbed) console.warn('[wa-translate] wam scrub could not install (module not found)');
 
   installSendHook();
+  installBusinessAdapter();
   console.info('[wa-translate] ready');
 })();

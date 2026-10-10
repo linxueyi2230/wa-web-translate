@@ -14,6 +14,7 @@ interface Pending {
 }
 
 const pending = new Map<string, Pending>();
+const inflight = new Map<string, Promise<TranslateResult>>();
 
 window.addEventListener('message', (e) => {
   if (e.source !== window) return;
@@ -45,6 +46,15 @@ window.addEventListener('message', (e) => {
 });
 
 export function translate(req: TranslateRequest, timeoutMs = 30000): Promise<TranslateResult> {
+  const key = JSON.stringify([req.text, req.source ?? 'auto', req.target]);
+  const existing = inflight.get(key);
+  if (existing) return existing;
+  const operation = requestTranslation(req, timeoutMs).finally(() => inflight.delete(key));
+  inflight.set(key, operation);
+  return operation;
+}
+
+function requestTranslation(req: TranslateRequest, timeoutMs: number): Promise<TranslateResult> {
   const id = newRpcId();
   const startedAt = performance.now();
   const msg: TranslateRpcRequest = {

@@ -2,6 +2,20 @@
 const STYLE_ID = 'wa-translate-styles';
 
 const CSS = `
+.wa-business-bar {
+  background: #17252d; color: #e9edef; border-top: 1px solid #355348;
+  padding: 10px 16px; font: 12px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  max-height: 280px; overflow: auto;
+}
+.wa-business-bar strong { display: block; font-size: 13px; margin-bottom: 5px; }
+.wa-business-bar button { border: 1px solid #3c5751; border-radius: 5px; padding: 5px 9px; margin: 4px 7px 4px 0; background: #223a32; color: #d2ecdf; cursor: pointer; }
+.wa-business-bar button:disabled { opacity: .5; }
+.wa-business-bar small { display: block; color: #9dafa7; }
+.wa-business-bar pre { white-space: pre-wrap; font: inherit; padding: 8px; background: #101c22; border-radius: 5px; max-height: 120px; overflow: auto; }
+.wa-business-bar .wa-business-error { color: #f5bd86; margin: 5px 0; }
+.wa-business-images { display: flex; gap: 10px; margin: 5px 0; }
+.wa-business-images label { display: flex; align-items: center; gap: 3px; }
+.wa-business-images img { width: 42px; height: 42px; object-fit: cover; border-radius: 4px; }
 .wa-translate-message-local {
   display: block;
   margin-top: 7px;

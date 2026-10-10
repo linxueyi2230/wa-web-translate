@@ -14,6 +14,7 @@ import { newRpcId } from '@/shared/messages';
 import { syncMessageMetadata } from '../message-metadata';
 import { normalizeChatId, parseMessageId, comparableText, type OutgoingDraft } from '@/shared/message-history';
 import { chatKey, messageKey, modelField } from '@/shared/whatsapp-keys';
+import { businessDraftMessageId, isBusinessDraft, notifyBusinessDraftSent, notifyBusinessMessageSent } from '../business-drafts';
 
 interface Candidate {
   module: string;
@@ -42,6 +43,9 @@ export function installSendHook(): Array<{ module: string; function: string }> {
     if (!mod || typeof mod[c.function] !== 'function') continue;
     const orig = mod[c.function].bind(mod);
     mod[c.function] = async (...args: any[]) => {
+      const businessChat = chatKey(modelField(args[0], 'id')) ?? chatKey(args[0]);
+      const sentBody = args[c.bodyArgIndex];
+      const businessMessageId = businessChat && typeof sentBody === 'string' ? businessDraftMessageId(businessChat, sentBody) : undefined;
       let draft: OutgoingDraft | undefined;
       let next: any[];
       try {
@@ -61,6 +65,8 @@ export function installSendHook(): Array<{ module: string; function: string }> {
         if (draft) cancelOutgoing(draft.token);
         throw err;
       }
+      if (businessChat && businessMessageId) notifyBusinessMessageSent(businessChat, businessMessageId);
+      else if (businessChat && typeof sentBody === 'string') notifyBusinessDraftSent(businessChat, sentBody);
       if (draft) {
         // Prefer the actual sent model's MessageKey, even when the user has switched
         // chats before send completed. DOM matching remains a compatibility fallback.
@@ -138,6 +144,9 @@ async function maybeRewrite(args: any[], c: Candidate): Promise<{ args: any[]; d
 
   // Capture the chat before awaiting the provider; the active chat can change meanwhile.
   const chatId = chatKey(modelField(args[0], 'id')) ?? chatKey(args[0]) ?? getActiveChatId();
+  if (chatId && isBusinessDraft(chatId, body)) {
+    return { args }; // Already prepared in Spanish, including edits in the native composer.
+  }
 
   console.info('[wa-translate][send] translation start', {
     provider: config.provider,

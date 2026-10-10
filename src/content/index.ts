@@ -13,12 +13,15 @@ import type { Config } from '@/shared/types';
 import { translate } from '@/page/bridge';
 import { MessageTranslations } from './message-translations';
 import { injectStyles } from '@/page/ui/styles';
+import { BusinessReplies } from './business-replies';
 
 // DOM annotations live in the isolated content script: originals never become
 // part of WhatsApp's message model, encrypted payload, quoted reply, or search index.
 injectStyles();
 const history = new MessageTranslations(translate);
 history.start();
+const businessReplies = new BusinessReplies(translate);
+businessReplies.start();
 
 // `__PAGE_BUNDLE_URL__` is a placeholder. The post-build Vite plugin replaces it with
 // the bundled MAIN-world entry path (e.g. `assets/index.ts-XXX.js`).

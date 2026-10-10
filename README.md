@@ -1,20 +1,28 @@
 # WA Web Translate
 
-A hilariously vibe-coded Chrome extension that adds **two-way AI translation** to WhatsApp Web. Configure both participants' native languages once — outgoing messages are translated before they're sent, incoming messages are translated as they arrive. Originals remain visible locally for verification and are not included in outgoing messages.
+A hilariously vibe-coded Chrome extension that adds **two-way AI translation** and **local foreign-trade reply assistance** to WhatsApp Web. Configure both participants' native languages once — outgoing messages are translated before they're sent, incoming messages are translated as they arrive. Originals remain visible locally for verification and are not included in outgoing messages.
 
 > If this saves you time talking to people across languages, please consider [sponsoring my work](https://purpshell.dev/sponsor) so I can keep maintaining it.
 
 ## What it does
 
-- **Outgoing**: type in your native language → click WhatsApp's send button or press Enter → translate once and send only the translation. Typing does not call the AI and there is no composer preview or popup. Your exact typed original appears beneath the sent message, locally. It is never added to the WhatsApp message body. Translation/local-original storage failures stop the send instead of silently sending untranslated text.
+- **Outgoing**: type in your native language → click WhatsApp's send button or press Enter → translate once and send only the translation. Typing does not call the AI. Your exact typed original appears beneath the sent message, locally. It is never added to the WhatsApp message body. Translation/local-original storage failures stop the send instead of silently sending untranslated text. Business drafts already prepared in Spanish are sent without a second translation.
 - **Incoming**: each received original remains unchanged, with your native-language translation displayed beneath it. Text messages and media captions are handled when their bubbles become visible; media without captions and quoted snippets are skipped. Translation errors have a local retry button.
-- **Message appearance**: the original message keeps WhatsApp's native styling. A thin solid horizontal line separates the local native-language text below it, rendered in wine red (`#800020` in light mode; a lighter wine shade in dark mode). There are no visible language headings, arrow annotations, extra message bubbles or composer overlays. Hover/accessibility text distinguishes saved originals from reverse translations.
+- **Message appearance**: the original message keeps WhatsApp's native styling. A thin solid horizontal line separates the local native-language text below it, rendered in wine red (`#800020` in light mode; a lighter wine shade in dark mode). There are no visible language headings, arrow annotations or extra message bubbles. Hover/accessibility text distinguishes saved originals from reverse translations.
 - **Revisit history**: sent originals and received translations persist in extension-local storage, keyed by WhatsApp message ID. Refreshing, switching chats or scrolling history restores the local annotations. Edited text and language/provider/prompt changes invalidate translation cache entries. Already-sent messages without a saved original get a reverse translation, identified in the hover/accessibility text, not a claimed reconstruction of your input.
 - **Global language settings**: configure **My native language** and **Other person's native language** once in the extension options. Outgoing and incoming messages use the two saved languages automatically.
 - **Configurable AI**: DeepSeek, Anthropic Claude, OpenAI GPT, or Google Gemini. Bring your own API key.
 - **Configurable style**: a global "personality" prompt lets you steer tone — e.g. *"Match the casual tone of the source. Use UK spelling. Keep emojis."*
 
 All keys live in `chrome.storage.local`. Nothing is sent anywhere except the AI provider you've chosen.
+
+## 外贸回复首版
+
+设置页采用六个顶部标签：设置、商品、支付方式、物流、信任与保障、自动回复。支持逐条维护本地商品、多图和封面、中文关键词的启停与 AI 建议、默认/备用支付方式、物流说明和可选客户群邀请。业务回复目标固定为墨西哥西班牙语；中文内容翻译，已填西语直接使用。
+
+草稿默认放入来源客户的空 WhatsApp 输入框，不覆盖正在输入的文字。所有自动回复开关默认关闭；全局与对应类别都开启后才自动发送。涉及价格、多商品或多类别时仍要求人工确认。草稿模式下先打开对应客户聊天才处理；自动模式可以按消息所属聊天处理新消息，不切换当前聊天来代发。
+
+完整页面、存储、发送规则与验收步骤见 [外贸回复开发说明](docs/foreign-trade-replies.md)。WhatsApp 的图片预览和后台消息接口仍需在实际账号页面验收。构建后重新加载现有 `dist/` 扩展并刷新 WhatsApp；保留原扩展安装即可保留本地配置和历史。
 
 ## Install (developer mode)
 
@@ -34,9 +42,9 @@ WhatsApp Web ships a Metro-style module bundle that exposes `window.require("Mod
 | Outbound | `WAWebSendTextMsgChatAction.sendTextMsgToChat` (+ `WAWebNewsletterSendMsgAction.sendNewsletterTextMsg`) | Preserve the exact input locally before sending; send only the translated body. Bind the original to the sent model's MessageKey; new-bubble matching is a compatibility fallback. Only one function per module is hooked to avoid double translation. |
 | Message display | Content script `MutationObserver` + MAIN-world metadata adapter | Read message keys from DOM attributes or the rendered body's React message props, append a separate local-only DOM annotation under each bubble, and restore it after WhatsApp's virtualized list re-renders. Incoming protobuf/message models are NOT modified. |
 | History | `chrome.storage.local`, separate per-message records | Persist originals and cache translations. Include message text and native-language/provider/model/prompt context in cache keys to detect edits and setting changes. Deduplicate in-flight requests and limit concurrent bubble translations to two. |
-| UI | Local elements inside existing message bubbles | Append only the wine-red local text below a thin solid divider. Leave WhatsApp's composer unchanged. |
+| UI | Local elements inside existing message bubbles; separate business draft helper | Append wine-red local text below a thin solid divider. Matched business replies can fill the empty native composer or open a native media preview for manual review. |
 
-There is no input listener/debounce translation, React composer root, live draft preview, or typing-triggered request. All bilingual UI lives inside the chat history's existing message bubbles.
+Typing does not trigger translation requests. Bilingual history annotations stay inside existing message bubbles. The separate business assistant listens for newly received customer messages and preserves edits to its prepared Spanish drafts in the native composer.
 
 These annotations are not part of WhatsApp's synced data, search index, quoted replies or forwarded messages. They are available in the same Chrome profile while the extension's data is retained, not automatically on another computer or phone. Uninstalling the extension or clearing its storage removes this local history. Storage quota failures are reported instead of being treated as successfully saved records; originals are not silently evicted after a fixed number of messages. The DOM selectors and internal send hook are unofficial WhatsApp interfaces and may need updating when WhatsApp changes its UI.
 

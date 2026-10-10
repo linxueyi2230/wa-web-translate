@@ -4,14 +4,14 @@ export default defineManifest({
   manifest_version: 3,
   name: 'WA Web Translate',
   version: '0.1.0',
-  description: 'AI-powered translation for WhatsApp Web',
+  description: 'AI translation and local foreign-trade reply assistance for WhatsApp Web',
   icons: {
     16: 'public/icons/16.png',
     32: 'public/icons/32.png',
     48: 'public/icons/48.png',
     128: 'public/icons/128.png',
   },
-  permissions: ['storage'],
+  permissions: ['storage', 'unlimitedStorage'],
   host_permissions: [
     'https://web.whatsapp.com/*',
     'https://api.deepseek.com/*',
