@@ -102,3 +102,26 @@ export function getActiveChatIdFromDom(): string | null {
   }
   return null;
 }
+
+export function nativeChatNavigationAvailable(): boolean {
+  return typeof tryRequire('WAWebCmd')?.Cmd?.openChatBottom === 'function';
+}
+
+// Navigation only: all business sends are triggered by the native Send button.
+// The named/positional signature changed at 2.3000.1029960097 (WA-JS Cmd adapter).
+export async function openNativeChat(chatId: string): Promise<void> {
+  const collection = tryRequire('WAWebChatCollection')?.ChatCollection;
+  const chats = collection?.getModelsArray?.() ?? collection?.models;
+  const chat = Array.isArray(chats) ? chats.find((model: any) => chatKey(modelField(model, 'id')) === normalizeChatId(chatId)) : undefined;
+  const cmd = tryRequire('WAWebCmd')?.Cmd;
+  if (!chat || typeof cmd?.openChatBottom !== 'function') throw new Error('无法按客户标识打开聊天，请手动打开后处理草稿');
+  const version = window.Debug?.VERSION?.split('.').map(Number) ?? [];
+  const boundary = [2, 3000, 1029960097];
+  let legacy = false;
+  for (let index = 0; index < boundary.length; index++) {
+    if (!Number.isFinite(version[index])) break;
+    if (version[index] !== boundary[index]) { legacy = version[index] < boundary[index]; break; }
+    if (index === boundary.length - 1) legacy = true;
+  }
+  await cmd.openChatBottom(legacy ? chat : { chat });
+}

@@ -3,8 +3,10 @@ import type { TranslateRequest, TranslateResult } from '@/shared/types';
 import { buildPrompt, parseModelOutput } from './prompt';
 import { callModel } from './providers';
 import type { RpcMessage, TranslateRpcRequest } from '@/shared/messages';
-import { BUSINESS_CONTEXT_PREFIX, BUSINESS_RUNTIME_PREFIX, businessSettingsSignature, containsPriceContent, hasPriceIntent, type BusinessRuntimeRecord, type IncomingBusinessMessage } from '@/shared/business-replies';
+import { BUSINESS_CONTEXT_PREFIX, BUSINESS_RUNTIME_PREFIX, businessSettingsSignature, compareBusinessArrival, containsPriceContent, hasPriceIntent, type BusinessRuntimeRecord, type IncomingBusinessMessage } from '@/shared/business-replies';
 import { parseMessageId } from '@/shared/message-history';
+import { AUTO_LEASE_MS, BUSINESS_AUTO_LEASE_KEY, BUSINESS_AUTO_STATUS_KEY, BUSINESS_AUTO_ORDER_KEY, type BusinessAutoLease } from '@/shared/business-auto';
+import { translationContext } from '@/shared/message-history';
 
 console.info('[wa-translate][sw] service worker loaded');
 
@@ -113,7 +115,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
   if (msg?.kind?.startsWith('BUSINESS_RUNTIME_')) {
     businessOperation = businessOperation.catch(() => {}).then(async () => {
-      try { sendResponse({ ok: true, result: await handleBusinessRuntime(msg) }); }
+      try { sendResponse({ ok: true, result: await handleBusinessRuntime(msg, _sender) }); }
       catch (error) { sendResponse({ ok: false, error: error instanceof Error ? error.message : '无法保存回复状态' }); }
     });
     return true;
@@ -145,7 +147,36 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
 let businessOperation: Promise<void> = Promise.resolve();
 
-async function handleBusinessRuntime(msg: any): Promise<unknown> {
+async function handleBusinessRuntime(msg: any, sender: chrome.runtime.MessageSender): Promise<unknown> {
+  if (msg.kind.startsWith('BUSINESS_RUNTIME_QUEUE_')) {
+    const lease = (await chrome.storage.local.get(BUSINESS_AUTO_LEASE_KEY))[BUSINESS_AUTO_LEASE_KEY] as BusinessAutoLease | undefined;
+    const active = lease && lease.expiresAt > Date.now();
+    const owns = active && lease.owner === msg.owner && lease.token === msg.token && lease.tabId === sender.tab?.id;
+    if (typeof msg.owner !== 'string') throw new Error('队列所属页面无效');
+    if (msg.kind === 'BUSINESS_RUNTIME_QUEUE_ACQUIRE') {
+      if (active) return owns ? lease : null;
+      const next: BusinessAutoLease = { owner: msg.owner, tabId: sender.tab?.id, token: crypto.randomUUID(), expiresAt: Date.now() + AUTO_LEASE_MS };
+      await chrome.storage.local.set({ [BUSINESS_AUTO_LEASE_KEY]: next });
+      return next;
+    }
+    if (msg.kind === 'BUSINESS_RUNTIME_QUEUE_RENEW') {
+      if (!owns) return null;
+      const next = { ...lease, expiresAt: Date.now() + AUTO_LEASE_MS };
+      await chrome.storage.local.set({ [BUSINESS_AUTO_LEASE_KEY]: next });
+      return next;
+    }
+    if (msg.kind === 'BUSINESS_RUNTIME_QUEUE_RELEASE') {
+      if (owns) await chrome.storage.local.remove(BUSINESS_AUTO_LEASE_KEY);
+      return Boolean(owns);
+    }
+    if (msg.kind === 'BUSINESS_RUNTIME_QUEUE_STATUS') {
+      if (active && !owns) return false;
+      const status = msg.status;
+      if (status && typeof status.phase === 'string') await chrome.storage.local.set({ [BUSINESS_AUTO_STATUS_KEY]: { ...status, owner: msg.owner, updatedAt: Date.now() } });
+      return true;
+    }
+    return null;
+  }
   if (msg.kind === 'BUSINESS_RUNTIME_CONTEXT') {
     if (typeof msg.chatId !== 'string' || !/^[^\s_]+@(?:c\.us|s\.whatsapp\.net|lid)$/.test(msg.chatId)) throw new Error('聊天标识无效');
     const contextKey = `${BUSINESS_CONTEXT_PREFIX}${msg.chatId}`;
@@ -156,7 +187,7 @@ async function handleBusinessRuntime(msg: any): Promise<unknown> {
     const stored = await chrome.storage.local.get(null);
     return Object.entries(stored).filter(([key]) => key.startsWith(BUSINESS_RUNTIME_PREFIX))
       .map(([, record]) => record as BusinessRuntimeRecord)
-      .filter((record) => ['pending', 'processing', 'ready', 'sending'].includes(record.status));
+      .filter((record) => ['pending', 'processing', 'queued', 'ready', 'sending'].includes(record.status));
   }
   const message: IncomingBusinessMessage = msg.message;
   const id = typeof msg.messageId === 'string' ? msg.messageId : message?.id;
@@ -167,25 +198,44 @@ async function handleBusinessRuntime(msg: any): Promise<unknown> {
   if (msg.kind === 'BUSINESS_RUNTIME_ACCEPT') {
     if (record) return record;
     if (!message || parsed.chatId !== message.chatId || typeof message.text !== 'string' || !message.text.trim()) throw new Error('客户消息归属无效');
-    const next: BusinessRuntimeRecord = { message, status: 'pending', updatedAt: Date.now() };
-    await chrome.storage.local.set({ [key]: next });
+    const previousOrder = (await chrome.storage.local.get(BUSINESS_AUTO_ORDER_KEY))[BUSINESS_AUTO_ORDER_KEY];
+    const queueOrder = Math.max(Date.now(), (typeof previousOrder === 'number' ? previousOrder : 0) + 1);
+    const next: BusinessRuntimeRecord = { message, queueOrder, status: 'pending', updatedAt: Date.now() };
+    await chrome.storage.local.set({ [key]: next, [BUSINESS_AUTO_ORDER_KEY]: queueOrder });
     return next;
   }
   if (!record) throw new Error('待回复消息不存在');
+  if (msg.kind === 'BUSINESS_RUNTIME_TAKE_QUEUED' || msg.kind === 'BUSINESS_RUNTIME_CAN_SEND' || msg.kind === 'BUSINESS_RUNTIME_CHECK_SEND') {
+    const lease = (await chrome.storage.local.get(BUSINESS_AUTO_LEASE_KEY))[BUSINESS_AUTO_LEASE_KEY] as BusinessAutoLease | undefined;
+    if (!lease || lease.expiresAt <= Date.now() || lease.owner !== msg.owner || lease.token !== msg.queueToken || lease.tabId !== sender.tab?.id) return false;
+    if (msg.kind === 'BUSINESS_RUNTIME_TAKE_QUEUED') {
+      if (record.status !== 'queued') return null;
+      // Storage events can arrive late in another tab. Enforce FIFO here too,
+      // before granting that page ownership of a particular native task.
+      const oldest = Object.entries(await chrome.storage.local.get(null)).filter(([name]) => name.startsWith(BUSINESS_RUNTIME_PREFIX))
+        .map(([, value]) => value as BusinessRuntimeRecord)
+        .filter((item) => ['pending', 'processing', 'queued', 'sending'].includes(item.status)).sort(compareBusinessArrival)[0];
+      if (oldest?.message.id !== id) return null;
+      const next = { ...record, owner: msg.owner, updatedAt: Date.now() };
+      await chrome.storage.local.set({ [key]: next });
+      return next;
+    }
+  }
   if (msg.kind === 'BUSINESS_RUNTIME_CAN_SEND' || msg.kind === 'BUSINESS_RUNTIME_CHECK_SEND') {
     const finalCheck = msg.kind === 'BUSINESS_RUNTIME_CHECK_SEND';
-    if (record.owner !== msg.owner || record.status !== (finalCheck ? 'sending' : 'processing') || record.manualOnly
-      || !record.reply?.trim() || hasPriceIntent(record.translated ?? '') || containsPriceContent(record.reply) || (record.productIds?.length ?? 0) > 1
+    if (record.owner !== msg.owner || record.status !== (finalCheck ? 'sending' : 'queued') || record.manualOnly
+      || !record.reply?.trim() || !record.preparedReply?.trim() || hasPriceIntent(record.translated ?? '') || containsPriceContent(record.reply) || (record.productIds?.length ?? 0) > 1
+      || containsPriceContent(record.preparedReply ?? '')
       || record.categories?.length !== 1) return false;
     const [business, config] = await Promise.all([loadBusinessData(), loadConfig()]);
     const category = record.categories[0];
-    if (!config.enabled || !business.globalAutoReply || !business.riskConfirmed || !business.autoReply[category]) return false;
+    if (!config.enabled || !business.globalAutoReply || !business.autoReply[category]) return false;
     if (record.settingsSignature && record.settingsSignature !== businessSettingsSignature(business)) return false;
+    if (record.translationContext !== translationContext(config)) return false;
     if (finalCheck) return Date.now() - record.updatedAt < 60_000;
-    const cooldownKey = `waTranslate:business:cooldown:${record.message.chatId}:${category}`;
-    const lastSent = (await chrome.storage.local.get(cooldownKey))[cooldownKey] as number | undefined;
-    if (Date.now() - (lastSent ?? 0) < 60_000) return false;
-    await chrome.storage.local.set({ [cooldownKey]: Date.now(), [key]: { ...record, status: 'sending', updatedAt: Date.now() } });
+    // The same incoming ID can acquire this transition only once. A different
+    // new message must not silently become a manual draft due to category rate.
+    await chrome.storage.local.set({ [key]: { ...record, status: 'sending', updatedAt: Date.now() } });
     return true;
   }
   if (msg.kind === 'BUSINESS_RUNTIME_CLAIM') {
@@ -200,6 +250,7 @@ async function handleBusinessRuntime(msg: any): Promise<unknown> {
     if (msg.owner !== record.owner) throw new Error('回复正在另一个 WhatsApp 页面处理');
     const patch = msg.patch as Partial<BusinessRuntimeRecord>;
     if (['sent', 'dismissed', 'no-match'].includes(record.status)) return record;
+    if (typeof msg.expectedStatus === 'string' && record.status !== msg.expectedStatus) return record;
     const next = { ...record, ...patch, message: record.message, owner: record.owner, updatedAt: Date.now() };
     const context = next.status === 'sent'
       ? { [`${BUSINESS_CONTEXT_PREFIX}${record.message.chatId}`]: { category: next.categories?.length === 1 ? next.categories[0] : null, sentAt: Date.now() } } : {};

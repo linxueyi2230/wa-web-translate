@@ -1,5 +1,6 @@
 import type { Config, TranslateRequest } from '@/shared/types';
 import { getLanguage } from '@/shared/languages';
+import { TRANSLATION_MEANING_GUIDANCE, translationScenePrompt } from '@/shared/translation-policy';
 
 export interface BuiltPrompt {
   system: string;
@@ -16,11 +17,14 @@ export function buildPrompt(req: TranslateRequest, config: Config): BuiltPrompt 
   const expectsSourcePrefix = !source;
 
   const personality = config.personality.trim();
+  const scene = translationScenePrompt(config);
 
   const system = [
     `You are translating WhatsApp chat messages into ${targetName}.`,
     `Source language: ${sourceName}.`,
+    scene && `Translation context and terminology guidance:\n${scene}`,
     personality && `Style and tone guidance: ${personality}`,
+    TRANSLATION_MEANING_GUIDANCE,
     expectsSourcePrefix
       ? `First detect the source language, then on the FIRST line output exactly: \`SRC: <ISO 639-1 code>\` (e.g. \`SRC: es\`). On subsequent lines output ONLY the translation. No quotes, no explanation, no labels other than the first SRC line.`
       : `Output ONLY the translation. No quotes, no labels, no explanation.`,

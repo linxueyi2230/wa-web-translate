@@ -1,4 +1,5 @@
 import type { Config } from './types';
+import { TRANSLATION_POLICY_VERSION, translationScenePrompt } from './translation-policy';
 
 export const HISTORY_TAG = '__waTransHistory';
 export const PENDING_TTL_MS = 5 * 60_000;
@@ -58,8 +59,8 @@ export function matchesPending(
 
 export function translationContext(config: Config): string {
   // Never put an API key into a history record or a page-world message.
-  return JSON.stringify([config.nativeLang, config.provider,
-    config.model[config.provider] ?? '', config.personality]);
+  return JSON.stringify([TRANSLATION_POLICY_VERSION, config.nativeLang, config.provider,
+    config.model[config.provider] ?? '', config.personality, translationScenePrompt(config)]);
 }
 
 export function validDraft(value: unknown): value is OutgoingDraft {

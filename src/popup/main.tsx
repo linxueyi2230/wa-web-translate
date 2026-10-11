@@ -17,13 +17,13 @@ function PopupApp() {
   return (
     <div className="popup-shell">
       <div className="popup-row">
-        <strong>WA Web Translate</strong>
+        <strong>WhatsApp外贸助手</strong>
         <span className={hasKey ? 'popup-pill ok' : 'popup-pill warn'}>
-          {hasKey ? 'configured' : 'no API key'}
+          {hasKey ? '已配置AI' : '请设置AI API KEY'}
         </span>
       </div>
       <div className="popup-row">
-        <span>Provider</span>
+        <span>AI</span>
         <span>{config.provider}</span>
       </div>
       <div className="popup-row">
@@ -44,14 +44,14 @@ function PopupApp() {
             saveConfig({ enabled: e.target.checked });
           }}
         />
-        Enabled
+        启用
       </label>
       <button
         type="button"
         className="popup-btn"
         onClick={() => chrome.runtime.openOptionsPage()}
       >
-        Open settings
+        设置
       </button>
     </div>
   );

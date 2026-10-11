@@ -6,21 +6,29 @@ A hilariously vibe-coded Chrome extension that adds **two-way AI translation** a
 
 ## What it does
 
-- **Outgoing**: type in your native language → click WhatsApp's send button or press Enter → translate once and send only the translation. Typing does not call the AI. Your exact typed original appears beneath the sent message, locally. It is never added to the WhatsApp message body. Translation/local-original storage failures stop the send instead of silently sending untranslated text. Business drafts already prepared in Spanish are sent without a second translation.
+- **Outgoing**: type in your native language → click WhatsApp's send button or press Enter → translate once and send only the translation. Typing does not call the AI. Your exact typed original appears beneath the sent message, locally. It is never added to the WhatsApp message body. Translation/local-original storage failures stop the send instead of silently sending untranslated text. Chinese business drafts, including product media captions, stay in Chinese for manual review and translate the final edits only on Send. Business drafts already prepared in Spanish are sent without a second translation.
 - **Incoming**: each received original remains unchanged, with your native-language translation displayed beneath it. Text messages and media captions are handled when their bubbles become visible; media without captions and quoted snippets are skipped. Translation errors have a local retry button.
+- **Copy local text**: select the translation or saved original below a message, then use the browser's Copy command or the usual keyboard shortcut. The selected local text is copied directly; no extra copy button is shown.
+- **Payment meaning**: translation preserves payment obstacles and their stated causes. An unspecified inability to pay is kept neutral; it is not turned into an inability to afford the product. Explicit insufficient funds are still translated faithfully. Built-in rule changes invalidate translation caches while preserving saved sent originals.
 - **Message appearance**: the original message keeps WhatsApp's native styling. A thin solid horizontal line separates the local native-language text below it, rendered in wine red (`#800020` in light mode; a lighter wine shade in dark mode). There are no visible language headings, arrow annotations or extra message bubbles. Hover/accessibility text distinguishes saved originals from reverse translations.
 - **Revisit history**: sent originals and received translations persist in extension-local storage, keyed by WhatsApp message ID. Refreshing, switching chats or scrolling history restores the local annotations. Edited text and language/provider/prompt changes invalidate translation cache entries. Already-sent messages without a saved original get a reverse translation, identified in the hover/accessibility text, not a claimed reconstruction of your input.
 - **Global language settings**: configure **My native language** and **Other person's native language** once in the extension options. Outgoing and incoming messages use the two saved languages automatically.
 - **Configurable AI**: DeepSeek, Anthropic Claude, OpenAI GPT, or Google Gemini. Bring your own API key.
-- **Configurable style**: a global "personality" prompt lets you steer tone — e.g. *"Match the casual tone of the source. Use UK spelling. Keep emojis."*
+- **Configurable translation context**: Options → 设置 → 翻译场景与提示词 includes an editable foreign-trade scene for Chinese sellers and Mexican customers, plus the existing style guidance. The scene applies to the selected target language, including Mexican Spanish or business English. Save scene edits explicitly to apply them; typing does not request translations. Existing installations inherit the default scene without replacing their style guidance or language settings.
 
 All keys live in `chrome.storage.local`. Nothing is sent anywhere except the AI provider you've chosen.
 
 ## 外贸回复首版
 
-设置页采用六个顶部标签：设置、商品、支付方式、物流、信任与保障、自动回复。支持逐条维护本地商品、多图和封面、中文关键词的启停与 AI 建议、默认/备用支付方式、物流说明和可选客户群邀请。业务回复目标固定为墨西哥西班牙语；中文内容翻译，已填西语直接使用。
+设置页采用六个顶部标签：设置、商品、支付方式、物流、信任与保障、自动回复。支持逐条维护本地商品、多图和封面、中文关键词的启停与 AI 建议、默认/备用支付方式、物流说明和可选客户群邀请。业务回复目标固定为墨西哥西班牙语。人工草稿按模块所选语言展示：选中文时先用中文放入输入框或图片说明，确认发送后才翻成西语；报价同样适用。多类别合并含中文时整份草稿以中文确认，全西语配置则直接提供西语草稿。自动回复按源语言填入原生编辑框，提前缓存西语内容，点击原生发送时复用缓存译文并保留准确中文原文。
 
-草稿默认放入来源客户的空 WhatsApp 输入框，不覆盖正在输入的文字。所有自动回复开关默认关闭；全局与对应类别都开启后才自动发送。涉及价格、多商品或多类别时仍要求人工确认。草稿模式下先打开对应客户聊天才处理；自动模式可以按消息所属聊天处理新消息，不切换当前聊天来代发。
+草稿默认放入来源客户的空 WhatsApp 输入框，不覆盖正在输入的文字。所有自动回复开关默认关闭；全局与对应类别都开启后才自动发送。涉及价格、多商品或多类别时仍要求人工确认。草稿模式下先打开对应客户聊天才处理；自动模式按客户新消息到达顺序逐个切换来源聊天，填入原生编辑框并点击发送，确认发送结果后再处理下一位；队列结束保留最后聊天。人工操作期间暂停，连续空闲五秒后继续；输入框有未发送文字、图片预览或草稿编辑时保持暂停。主动关闭总开关不会自行恢复。
+
+自动客服在聊天中静默工作，不显示左下角状态框、排队数、待确认数量或暂停按钮。设置页仅保留总开关与分类设置，开启时不再弹出风险确认。多个标签页共享任务占用权；发送前复核收件人、内容、附件与配置，状态不确定时转人工检查，不重复点击。原生导航或发送不可用时转人工，不回退到直接发送 API。
+
+总开关与分类开关使用滑动开关，明确显示是否已生效；只开启总开关、分类关闭时会提示还需启用分类。普通自动回复通过原生编辑器的粘贴处理写入，等待编辑器异步提交内容、发送控件渲染就绪即自动点击，不额外增加五秒等待；嵌套控件按一次发送操作处理。移除同客户、同类别六十秒内强制转人工的限制，新消息独立触发，同一消息仍只发送一次。人工操作仍遵循五秒空闲保护，价格及合并回复继续使用人工草稿。旧人工记录及失败的自动发送不再自动插入来阻塞新任务，不重发旧消息。
+
+所有类别的草稿点击发送后立即隐藏插件辅助栏、编辑面板和“查看草稿”入口，中文、西语、纯文字与图片草稿采用同一规则。确认发送成功后结束本条草稿，延迟的编辑和预览事件不会再次弹出旧面板；失败时提供错误提示与人工恢复入口。后续客户新消息仍独立生成新草稿。
 
 完整页面、存储、发送规则与验收步骤见 [外贸回复开发说明](docs/foreign-trade-replies.md)。WhatsApp 的图片预览和后台消息接口仍需在实际账号页面验收。构建后重新加载现有 `dist/` 扩展并刷新 WhatsApp；保留原扩展安装即可保留本地配置和历史。
 

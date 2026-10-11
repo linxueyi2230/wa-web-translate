@@ -9,6 +9,7 @@ export async function loadConfig(): Promise<Config> {
   return {
     ...DEFAULT_CONFIG,
     ...stored,
+    translationPrompt: typeof stored.translationPrompt === 'string' ? stored.translationPrompt : DEFAULT_CONFIG.translationPrompt,
     apiKeys: { ...DEFAULT_CONFIG.apiKeys, ...(stored.apiKeys ?? {}) },
     model: { ...DEFAULT_CONFIG.model, ...(stored.model ?? {}) },
   };
@@ -32,6 +33,9 @@ export async function loadBusinessData(): Promise<BusinessData> {
   return {
     ...DEFAULT_BUSINESS_DATA,
     ...stored,
+    // Upgrade the old built-in schedule without replacing custom dispatch text.
+    dispatchText: stored.dispatchText === '通常当天下午安排发货，节假日可能顺延。'
+      ? DEFAULT_BUSINESS_DATA.dispatchText : stored.dispatchText ?? DEFAULT_BUSINESS_DATA.dispatchText,
     autoReply: { ...DEFAULT_BUSINESS_DATA.autoReply, ...(stored.autoReply ?? {}) },
     products: Array.isArray(stored.products) ? stored.products : DEFAULT_BUSINESS_DATA.products,
     paymentMethods: Array.isArray(stored.paymentMethods) ? stored.paymentMethods : DEFAULT_BUSINESS_DATA.paymentMethods,

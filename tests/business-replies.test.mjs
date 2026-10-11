@@ -31,7 +31,7 @@ test('a generic enquiry selects the sole enabled product but pricing always requ
   assert.ok(!information.parts.map((part) => part.text).join('').includes('250'));
   const pricing = buildReplyPlan('这款多少钱，老客户有优惠吗？', business);
   assert.equal(pricing.autoAllowed, false);
-  assert.match(pricing.parts[0].text, /250 MXN/);
+  assert.match(pricing.parts.map((part) => part.text).join('\n'), /250 MXN/);
 });
 
 test('ambiguous products and combined categories remain manual; selection narrows to one product', () => {
@@ -67,8 +67,8 @@ test('global, category and risk acknowledgement are all required; the group link
   assert.ok(buildReplyPlan('可靠吗', business).missing.length > 0);
   business.customerGroupUrl = 'https://chat.whatsapp.com/TestInvite';
   const trust = buildReplyPlan('可靠吗', business);
-  assert.equal(trust.parts.at(-1).language, 'es-MX');
-  assert.match(trust.parts.at(-1).text, /número de teléfono/);
+  assert.equal(trust.parts.at(-1).language, business.trustLanguage);
+  assert.match(trust.parts.at(-1).text, /电话号码/);
 });
 
 const records = { config: { ...DEFAULT_CONFIG, nativeLang: 'zh-CN', targetLang: 'es' } };

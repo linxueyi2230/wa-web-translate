@@ -1,4 +1,5 @@
 import type { LanguageCode } from './languages';
+import { DEFAULT_TRANSLATION_PROMPT } from './translation-policy';
 
 export type Provider = 'deepseek' | 'anthropic' | 'openai' | 'google';
 
@@ -8,6 +9,7 @@ export interface Config {
   provider: Provider;
   apiKeys: Partial<Record<Provider, string>>;
   model: Partial<Record<Provider, string>>;
+  translationPrompt: string;
   personality: string;
   enabled: boolean;
 }
@@ -91,13 +93,13 @@ export const DEFAULT_BUSINESS_DATA: BusinessData = {
     { id: 'oxxo', name: 'OXXO', content: '', isDefault: false, enabled: true },
   ],
   shippingLanguage: 'zh-CN',
-  shippingKeywords: ['多久能收到', '几天到', '什么时候发货', '多久发货', '物流方式', '发货方式'].map((text, index) => ({ id: `shipping-${index}`, text, enabled: true, source: 'default' as const })),
+  shippingKeywords: ['多久能收到', '几天到', '什么时候发货', '多久发货', '物流方式', '发货方式', '怎么发货'].map((text, index) => ({ id: `shipping-${index}`, text, enabled: true, source: 'default' as const })),
   shippingDays: '9–12 天',
   shippingMethod: '中国物流',
-  dispatchText: '通常当天下午安排发货，节假日可能顺延。',
+  dispatchText: '通常当天下午安排发货，如遇到中国的节假日发货可能顺延。',
   trustLanguage: 'zh-CN',
   trustKeywords: ['交易安全吗', '可靠吗', '付款安全吗', '客户评价', '真实反馈'].map((text, index) => ({ id: `trust-${index}`, text, enabled: true, source: 'default' as const })),
-  trustText: '收到付款后我们会先核实，确认到账后才会安排发货。',
+  trustText: '交易绝对安全真实可靠，您付款后，我将会和财务核实付款信息，收到付款后会安排发货。',
   customerGroupUrl: '',
   includeGroupInvite: false,
   globalAutoReply: false,
@@ -116,6 +118,7 @@ export const DEFAULT_CONFIG: Config = {
     openai: 'gpt-4o-mini',
     google: 'gemini-2.0-flash',
   },
+  translationPrompt: DEFAULT_TRANSLATION_PROMPT,
   personality: 'Translate naturally and idiomatically. Match the tone of the original message (casual chat stays casual, formal stays formal). Preserve emojis. Do not add explanations.',
   enabled: true,
 };

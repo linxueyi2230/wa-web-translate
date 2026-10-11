@@ -11,7 +11,7 @@ export default defineManifest({
     48: 'public/icons/48.png',
     128: 'public/icons/128.png',
   },
-  permissions: ['storage', 'unlimitedStorage'],
+  permissions: ['storage', 'unlimitedStorage', 'clipboardRead', 'clipboardWrite'],
   host_permissions: [
     'https://web.whatsapp.com/*',
     'https://api.deepseek.com/*',

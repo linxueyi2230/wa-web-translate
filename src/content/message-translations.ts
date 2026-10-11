@@ -46,6 +46,9 @@ export class MessageTranslations {
 
   start(): void {
     window.addEventListener('message', this.onHistoryMessage);
+    // Handle only selected local text before document/message copy handlers.
+    // Native copy uses ClipboardEvent data and needs no Clipboard API permission.
+    window.addEventListener('copy', this.onCopy, true);
     window.addEventListener('scroll', this.schedule, true);
     window.addEventListener('resize', this.schedule);
     this.observer = new MutationObserver((changes) => {
@@ -64,6 +67,7 @@ export class MessageTranslations {
     this.stopped = true;
     this.observer?.disconnect();
     window.removeEventListener('message', this.onHistoryMessage);
+    window.removeEventListener('copy', this.onCopy, true);
     window.removeEventListener('scroll', this.schedule, true);
     window.removeEventListener('resize', this.schedule);
     if (this.timer) clearTimeout(this.timer);
@@ -129,6 +133,11 @@ export class MessageTranslations {
       addon.className = 'wa-translate-message-local';
       addon.setAttribute('translate', 'no');
       addon.setAttribute('contenteditable', 'false');
+      // Let the browser select our text, without WhatsApp handling this gesture
+      // as a click/selection on the surrounding original message.
+      for (const type of ['pointerdown', 'mousedown', 'click', 'dblclick', 'contextmenu', 'keydown']) {
+        addon.addEventListener(type, (event) => event.stopPropagation());
+      }
       const entry: Entry = { message, generation: this.generation, status: 'queued', addon };
       this.entries.set(bubble, entry);
       message.host.appendChild(addon);
@@ -184,7 +193,26 @@ export class MessageTranslations {
     body.dir = 'auto';
     body.textContent = text; // NEVER innerHTML: model output / message text is untrusted.
     entry.addon.appendChild(body);
+    if (kind === 'translation' || kind === 'original') {
+      body.tabIndex = 0;
+    }
   }
+
+  private onCopy = (event: ClipboardEvent): void => {
+    if (!event.clipboardData || document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLTextAreaElement) return;
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || selection.rangeCount !== 1) return;
+    const range = selection.getRangeAt(0);
+    const bodyFor = (node: Node) => (node instanceof Element ? node : node.parentElement)?.closest('.wa-translate-message-body');
+    const body = bodyFor(range.startContainer);
+    if (!body || body !== bodyFor(range.endContainer) || !body.closest(LOCAL)) return;
+    const text = selection.toString();
+    if (!text) return;
+    // Copy exactly the selected local text instead of letting a parent handler
+    // replace it with the surrounding WhatsApp message's original text.
+    event.clipboardData.setData('text/plain', text);
+    event.preventDefault(); event.stopImmediatePropagation();
+  };
 
   private showOriginal(entry: Entry, original: OriginalRecord): void {
     entry.status = 'done';
