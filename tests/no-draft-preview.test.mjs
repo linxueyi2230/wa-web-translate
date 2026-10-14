@@ -18,7 +18,7 @@ const fixture = new JSDOM(`<!doctype html><body><div id="main"><footer>
   <div contenteditable="true" role="textbox" id="composer"></div>
   <button id="send" type="button">Send</button>
 </footer></div></body>`, { url: 'https://web.whatsapp.com' });
-after(() => fixture.window.close());
+after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.window.close(); });
 for (const name of ['window', 'document', 'Node', 'Element', 'HTMLElement', 'MutationObserver', 'CustomEvent', 'MessageEvent']) {
   globalThis[name] = name === 'window' ? fixture.window : fixture.window[name];
 }

@@ -1,4 +1,4 @@
-import type { BusinessData, Product, ReplyCategory, ReplyKeyword, ReplyLanguage } from './types';
+import type { BusinessData, CommonPhrase, Product, ReplyCategory, ReplyKeyword, ReplyLanguage } from './types';
 
 export interface IncomingBusinessMessage { id: string; chatId: string; text: string; receivedAt: number }
 export interface BusinessDraftSnapshot {
@@ -21,6 +21,7 @@ export interface BusinessRuntimeRecord {
   draftLanguage?: ReplyLanguage;
   categories?: ReplyCategory[];
   productIds?: string[];
+  phraseIds?: string[];
   productPriceOnly?: boolean;
   error?: string;
   manualOnly?: boolean;
@@ -46,6 +47,7 @@ export interface ReplyPart {
   language: ReplyLanguage;
   label?: 'model' | 'price' | 'description';
   verbatim?: boolean;
+  preserveText?: boolean;
   separatorBefore?: '\n' | '\n\n' | ', ';
 }
 export const REPLY_LABELS: Record<ReplyLanguage, Record<NonNullable<ReplyPart['label']>, string>> = {
@@ -84,20 +86,50 @@ export function joinReplyParagraphs(parts: readonly string[], language: ReplyLan
   }, '');
 }
 
-export function formatReplyParts(parts: readonly Pick<ReplyPart, 'text' | 'label' | 'separatorBefore'>[], language: ReplyLanguage): string {
+export function formatReplyParts(parts: readonly Pick<ReplyPart, 'text' | 'label' | 'separatorBefore' | 'preserveText'>[], language: ReplyLanguage): string {
+  let previousPreserved = false;
   return parts.reduce((reply, part) => {
     const value = part.text.replace(/\r\n?/g, '\n').trim();
     const inline = part.separatorBefore === ', ';
     const text = inline ? value.split(/\n+/).reduce((field, line) => joinReplyFields(field, line, language), '') : value;
     if (!text) return reply;
     const field = `${part.label ? REPLY_LABELS[language][part.label] : ''}${text}`;
-    return inline ? joinReplyFields(reply, field, language)
+    const result = previousPreserved ? `${reply}\n\n${field}` : inline ? joinReplyFields(reply, field, language)
       : joinReplyParagraphs([reply, field], language, part.separatorBefore === '\n' ? '\n' : '\n\n');
+    previousPreserved = Boolean(part.preserveText);
+    return result;
   }, '');
+}
+
+export function usablePhrase(phrase: CommonPhrase): boolean {
+  return phrase.enabled && Boolean(phrase.title.trim() && phrase.content.trim())
+    && phrase.keywords.some((keyword) => keyword.enabled && keyword.text.trim());
+}
+
+export function hasAutomaticReplies(data: BusinessData): boolean {
+  return Object.values(data.autoReply).some(Boolean) || data.phrases.some(usablePhrase);
+}
+
+export function automaticCategoriesEnabled(data: BusinessData, categories: readonly ReplyCategory[] | undefined, phraseIds: readonly string[] = []): boolean {
+  if (!categories?.length) return false;
+  return categories.every((category) => category === 'phrase'
+    ? phraseIds.length > 0 && phraseIds.every((id) => data.phrases.some((phrase) => phrase.id === id && usablePhrase(phrase)))
+    : data.autoReply[category] === true);
+}
+
+export function isNumericProductPrice(price: string): boolean {
+  return /^(?:\d+(?:\.\d*)?|\.\d+)$/.test(price.trim());
+}
+
+export function productReplyImages(product: Product | undefined, priceOnly = false): Product['images'] {
+  if (!product || priceOnly) return [];
+  const cover = product.images.find((image) => image.id === product.coverImageId) ?? product.images[0];
+  return (cover ? [cover, ...product.images.filter((image) => image.id !== cover.id)] : []).slice(0, 6);
 }
 export interface ReplyPlan {
   categories: ReplyCategory[];
   products: Product[];
+  phrases: CommonPhrase[];
   parts: ReplyPart[];
   priceRequested: boolean;
   productPriceOnly: boolean;
@@ -108,7 +140,7 @@ export interface ReplyPlan {
 }
 
 export const CATEGORY_NAMES: Record<ReplyCategory, string> = {
-  product: '商品信息', payment: '支付方式', shipping: '物流与时效', trust: '信任与保障',
+  product: '商品信息', payment: '支付方式', shipping: '物流与时效', trust: '信任与保障', phrase: '常用语',
 };
 const PRICE_TERMS = ['多少钱', '价格', '价钱', '价位', '单价', '最低价', '总价', '售价', '报价', '优惠', '折扣', '便宜', '贵吗', '费用', '运费', '邮费', '手续费'];
 const PRODUCT_INFORMATION_TERMS = ['信息', '详情', '介绍', '描述', '图片', '照片', '相片', '规格', '尺码', '尺寸', '颜色', '材质', '面料', '参数', '功能'];
@@ -138,6 +170,26 @@ export function matchesKeyword(text: string, keyword: string): boolean {
 }
 export function matchesKeywords(text: string, keywords: ReplyKeyword[]): boolean {
   return keywords.some((keyword) => keyword.enabled && matchesKeyword(text, keyword.text));
+}
+
+const GREETING_WORDS = new Set(['你好', '您好', '嗨', '哈喽', 'hola', 'hello', 'hi']);
+
+export function simpleGreetingChinese(text: string): string | undefined {
+  const greeting = normalized(text).replace(/^[\p{P}\p{S}\s\uFE0F\u200D]+|[\p{P}\p{S}\s\uFE0F\u200D]+$/gu, '');
+  if (!GREETING_WORDS.has(greeting)) return undefined;
+  return /[\u3400-\u9fff]/u.test(greeting) ? greeting : '你好';
+}
+
+export function matchesPhraseKeywords(text: string, keywords: ReplyKeyword[]): boolean {
+  return keywords.some((keyword) => {
+    if (!keyword.enabled) return false;
+    if (matchesKeyword(text, keyword.text)) return true;
+    if (!GREETING_WORDS.has(normalized(keyword.text))) return false;
+    // Greeting translations vary between “你好”, “您好” and “嗨”. Match
+    // whole Latin words and Chinese greetings at the beginning of a message.
+    return ['hola', 'hello', 'hi'].some((word) => matchesKeyword(text, word))
+      || /^(?:你好|您好|嗨|哈喽)(?:[\s\p{P}\p{S}]|$)/u.test(normalized(text));
+  });
 }
 export function hasPriceIntent(text: string): boolean { return PRICE_TERMS.some((term) => matchesKeyword(text, term)); }
 function hasProductInformationIntent(text: string): boolean {
@@ -182,13 +234,13 @@ export function shippingReplyText(data: Pick<BusinessData, 'shippingLanguage' | 
   ], 'es-MX', '\n');
 }
 
-export function buildReplyPlan(text: string, data: BusinessData, lastCategory?: ReplyCategory, selectedProductId?: string): ReplyPlan {
+export function buildReplyPlan(text: string, data: BusinessData, lastCategory?: ReplyCategory, selectedProductId?: string, originalText?: string): ReplyPlan {
   const enabledProducts = data.products.filter((product) => product.enabled);
   let products = enabledProducts.filter((product) => matchesKeywords(text, product.keywords));
   const priceRequested = hasPriceIntent(text);
   const showProductPrice = priceRequested && !NON_PRODUCT_PRICE_TERMS.some((term) => matchesKeyword(text, term));
-  const productPriceOnly = showProductPrice && !hasProductInformationIntent(text);
   if (selectedProductId) products = enabledProducts.filter((product) => product.id === selectedProductId);
+  const productPriceOnly = products.length > 0 && showProductPrice && !hasProductInformationIntent(text);
   const paymentMatched = matchesKeywords(text, data.paymentKeywords.filter((keyword) => lastCategory === 'payment' || !CONTEXT_PAYMENT_TERMS.includes(keyword.text)));
   const paymentOptions = paymentMatched && [...ALTERNATIVE_TERMS, ...CONTEXT_PAYMENT_TERMS].some((term) => matchesKeyword(text, term));
   const paymentMethods = data.paymentMethods.filter((method) => method.enabled && method.name.trim() && method.content.trim());
@@ -200,6 +252,9 @@ export function buildReplyPlan(text: string, data: BusinessData, lastCategory?: 
   if (paymentMatched || explicitMethod) categories.push('payment');
   if (matchesKeywords(text, data.shippingKeywords)) categories.push('shipping');
   if (matchesKeywords(text, data.trustKeywords)) categories.push('trust');
+  const phrases = data.phrases.filter((phrase) => usablePhrase(phrase)
+    && (matchesPhraseKeywords(text, phrase.keywords) || Boolean(originalText && matchesPhraseKeywords(originalText, phrase.keywords))));
+  if (phrases.length) categories.push('phrase');
   const parts: ReplyPart[] = [];
   const missing: string[] = [];
   const needsProductSelection = products.length > 1;
@@ -211,9 +266,14 @@ export function buildReplyPlan(text: string, data: BusinessData, lastCategory?: 
         parts.push({ text: product.name.trim(), language: data.productLanguage, separatorBefore: ', ' });
         if (product.model.trim()) parts.push({ text: product.model.trim(), language: data.productLanguage, label: 'model', verbatim: true, separatorBefore: ', ' });
       }
-      if (showProductPrice) parts.push({ text: `${product.price} ${product.currency}`, language: data.productLanguage, label: 'price', verbatim: true, separatorBefore: ', ' });
+      const price = product.price.trim();
+      if (showProductPrice && !price) missing.push('请填写商品价格或报价说明');
+      if (showProductPrice && isNumericProductPrice(price)) parts.push({ text: `${price} ${product.currency}`, language: data.productLanguage, label: 'price', verbatim: true, separatorBefore: ', ' });
       if (!productPriceOnly && product.description.trim()) {
         parts.push({ text: product.description.trim(), language: data.productLanguage, label: 'description', separatorBefore: ', ' });
+      }
+      if (showProductPrice && price && !isNumericProductPrice(price)) {
+        parts.push({ text: price, language: 'es-MX', verbatim: true, preserveText: true, separatorBefore: '\n\n' });
       }
     }
   }
@@ -246,9 +306,9 @@ export function buildReplyPlan(text: string, data: BusinessData, lastCategory?: 
       else parts.push({ text: groupInvitationText(data.trustLanguage, data.customerGroupUrl), language: data.trustLanguage });
     }
   }
-  return { categories, products, parts, priceRequested, productPriceOnly, needsProductSelection, missing, paymentOptions,
-    autoAllowed: data.globalAutoReply && categories.length === 1 && !priceRequested
-      && !needsProductSelection && !missing.length && categories.every((category) => data.autoReply[category]) };
+  for (const phrase of phrases) parts.push({ text: phrase.content, language: phrase.language, separatorBefore: '\n\n' });
+  return { categories, products, phrases, parts, priceRequested, productPriceOnly, needsProductSelection, missing, paymentOptions,
+    autoAllowed: automaticCategoriesEnabled(data, categories, phrases.map((phrase) => phrase.id)) && !needsProductSelection && !missing.length };
 }
 
 export function validGroupUrl(text: string): boolean {

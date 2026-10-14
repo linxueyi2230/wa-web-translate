@@ -187,7 +187,7 @@ export function installBusinessAdapter(): void {
     },
     insert: async (request, validate) => {
       if (!isTextSendHookReady()) throw new Error('原生发送监听未准备就绪，请手动处理草稿');
-      if (request.images.length > 1) throw new Error('自动回复只允许发送商品封面图');
+      if (request.images.length > 6) throw new Error('商品自动回复最多附加 6 张图片');
       if (request.images.length && !installBusinessMediaSendHook()) throw new Error('原生图片发送监听不可用，请手动处理草稿');
       await placeDraft(request, validate);
     },

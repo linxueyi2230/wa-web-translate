@@ -182,9 +182,11 @@ export class NativeAutoReply {
       this.guard(task);
       await this.idle(task);
       this.guard(task);
+      if (!await this.callbacks.authorize(request, false)) throw new NativeReplyError('自动回复已暂停或配置已变化，本条请人工确认');
+      this.guard(task);
       // The hook consumes the cached Spanish output only after native Send,
       // retaining the exact Chinese text as the local original.
-      registerNativeBusinessSend(request.chatId, request.messageId, request.text, request.preparedReply, Boolean(request.images.length), () => this.valid(task));
+      registerNativeBusinessSend(request.chatId, request.messageId, request.text, request.preparedReply, Boolean(request.images.length), () => this.valid(task), request.images.map((image) => image.id));
       task.inserted = true; this.report();
       task.writing = true;
       try { await this.callbacks.insert(request, () => this.guard(task)); }
@@ -194,7 +196,6 @@ export class NativeAutoReply {
       // Filling the editor triggers a React update: Send may replace the mic
       // button on the next frame. Wait for that control, then send immediately.
       await this.waitForSendButton(task);
-      if (!await this.callbacks.authorize(request, false)) throw new NativeReplyError('自动回复已暂停或配置已变化，本条请人工确认');
       while (true) {
         await this.idle(task, true);
         if (!await this.callbacks.authorize(request, true)) throw new NativeReplyError('发送前核验未通过，本条请人工确认');

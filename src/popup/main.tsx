@@ -2,6 +2,7 @@ import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { languageLabel } from '@/shared/languages';
 import { loadConfig, saveConfig } from '@/shared/storage';
+import { ToggleSwitch } from '@/shared/ui/ToggleSwitch';
 import type { Config } from '@/shared/types';
 import './styles.css';
 
@@ -11,7 +12,7 @@ function PopupApp() {
     loadConfig().then(setConfig);
   }, []);
 
-  if (!config) return <div className="popup-shell">Loading…</div>;
+  if (!config) return <div className="popup-shell">正在加载…</div>;
 
   const hasKey = !!config.apiKeys[config.provider];
   return (
@@ -34,18 +35,10 @@ function PopupApp() {
         <span>对方的母语</span>
         <span>{languageLabel(config.targetLang)}</span>
       </div>
-      <label className="popup-toggle">
-        <input
-          type="checkbox"
-          checked={config.enabled}
-          onChange={(e) => {
-            const next = { ...config, enabled: e.target.checked };
-            setConfig(next);
-            saveConfig({ enabled: e.target.checked });
-          }}
-        />
-        启用
-      </label>
+      <ToggleSwitch compact label="启用翻译插件" checked={config.enabled} onChange={(enabled) => {
+        setConfig({ ...config, enabled });
+        void saveConfig({ enabled });
+      }} />
       <button
         type="button"
         className="popup-btn"

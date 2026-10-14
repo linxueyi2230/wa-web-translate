@@ -1,4 +1,4 @@
-import { buildReplyPlan, businessSettingsSignature, compareBusinessArrival, BUSINESS_RUNTIME_PREFIX, CATEGORY_NAMES, formatReplyParts, type BusinessDraftSnapshot, type BusinessRuntimeRecord, type IncomingBusinessMessage, type ReplyPlan } from '@/shared/business-replies';
+import { automaticCategoriesEnabled, hasAutomaticReplies, simpleGreetingChinese, productReplyImages, buildReplyPlan, businessSettingsSignature, compareBusinessArrival, BUSINESS_RUNTIME_PREFIX, CATEGORY_NAMES, formatReplyParts, type BusinessDraftSnapshot, type BusinessRuntimeRecord, type IncomingBusinessMessage, type ReplyPlan } from '@/shared/business-replies';
 import { loadBusinessData, loadConfig, watchBusinessData, watchConfig } from '@/shared/storage';
 import { newRpcId } from '@/shared/messages';
 import { translationContext } from '@/shared/message-history';
@@ -328,7 +328,6 @@ export class BusinessReplies {
       if (this.active.size >= 2) return;
       if (this.active.has(record.message.id)) continue;
       if (record.status !== 'pending' && !(record.status === 'processing' && Date.now() - record.updatedAt > 120_000)) continue;
-      if (!this.data.globalAutoReply && record.message.chatId !== this.chatId) continue;
       this.active.add(record.message.id);
       void this.process(record).finally(() => { this.active.delete(record.message.id); this.render(); this.drain(); });
     }
@@ -338,8 +337,7 @@ export class BusinessReplies {
     if (!this.data || !this.config || this.pageGone) return;
     for (const record of this.records.values()) {
       if (record.status !== 'queued' || record.message.id === this.autoMessageId || this.downgrading.has(record.message.id)) continue;
-      const enabled = this.config.enabled && this.data.globalAutoReply
-        && record.categories?.length === 1 && this.data.autoReply[record.categories[0]];
+      const enabled = this.config.enabled && automaticCategoriesEnabled(this.data, record.categories, record.phraseIds);
       if (enabled && record.settingsSignature === businessSettingsSignature(this.data) && record.translationContext === translationContext(this.config)) continue;
       this.downgrading.add(record.message.id);
       void this.runtime<BusinessRuntimeRecord>('UPDATE', { messageId: record.message.id, owner: record.owner, expectedStatus: 'queued',
@@ -362,9 +360,9 @@ export class BusinessReplies {
       const translated = record.translationContext === promptContext && record.translated
         ? record.translated : await this.incomingChinese(record.message);
       const context = await this.runtime<ReplyCategory | null>('CONTEXT', { chatId: record.message.chatId });
-      const plan = buildReplyPlan(translated, this.data, context ?? undefined, selectedProductId);
+      const plan = buildReplyPlan(translated, this.data, context ?? undefined, selectedProductId, record.message.text);
       if (!plan.categories.length) { await this.update(record, { status: 'no-match', translated, translationPolicyVersion: TRANSLATION_POLICY_VERSION, translationContext: promptContext }); return; }
-      const patch: Partial<BusinessRuntimeRecord> = { translated, translationPolicyVersion: TRANSLATION_POLICY_VERSION, translationContext: promptContext, categories: plan.categories, productIds: plan.products.map((product) => product.id), productPriceOnly: plan.productPriceOnly, settingsSignature: businessSettingsSignature(this.data) };
+      const patch: Partial<BusinessRuntimeRecord> = { translated, translationPolicyVersion: TRANSLATION_POLICY_VERSION, translationContext: promptContext, categories: plan.categories, productIds: plan.products.map((product) => product.id), phraseIds: plan.phrases.map((phrase) => phrase.id), productPriceOnly: plan.productPriceOnly, settingsSignature: businessSettingsSignature(this.data) };
       if (plan.needsProductSelection || plan.missing.length) {
         await this.update(record, { ...patch, status: 'ready', error: plan.needsProductSelection ? '命中多个商品，请选择后生成草稿' : plan.missing.join('；'), manualOnly: true });
         return;
@@ -381,7 +379,7 @@ export class BusinessReplies {
       const preparedReply = automaticCandidate ? await this.prepareText(plan, 'es-MX') : undefined;
       const automatic = automaticCandidate && generation === this.generation && this.config.enabled;
       if (!reply.trim()) throw new Error('回复内容为空');
-      record = await this.update(record, { ...patch, reply, preparedReply, draftLanguage: manualLanguage, status: automatic ? 'queued' : 'ready', error: '', manualOnly: record.manualOnly || plan.priceRequested || Boolean(selectedProductId) });
+      record = await this.update(record, { ...patch, reply, preparedReply, draftLanguage: manualLanguage, status: automatic ? 'queued' : 'ready', error: '', manualOnly: record.manualOnly || Boolean(selectedProductId) });
     } catch (error) {
       const message = error instanceof Error ? error.message : '回复生成失败';
       try { await this.update(record, { status: 'ready', error: message, manualOnly: true }); }
@@ -391,7 +389,7 @@ export class BusinessReplies {
 
   private syncAutoControl(): void {
     window.postMessage({ [TAG]: true, kind: 'AUTO_CONTROL', control: {
-      enabled: Boolean(this.config?.enabled && this.data?.globalAutoReply && !this.pageGone),
+      enabled: Boolean(this.config?.enabled && (this.data && hasAutomaticReplies(this.data)) && !this.pageGone),
       epoch: this.generation, token: this.autoLease?.token ?? '', expiresAt: this.autoLease?.expiresAt ?? 0,
       editorBusy: Boolean(this.editorSession?.open || this.editorSession?.busy || this.manualSending.size),
     } }, '*');
@@ -401,11 +399,11 @@ export class BusinessReplies {
     const pending = [...this.records.values()].filter((record) => ['pending', 'processing', 'queued', 'sending'].includes(record.status)).length;
     const manual = [...this.records.values()].filter((record) => record.status === 'ready').length;
     const status: BusinessAutoStatus = { ...this.autoState, owner: this.owner, pending, manual, updatedAt: Date.now() };
-    if (!this.data.globalAutoReply || !this.config.enabled) { status.phase = 'paused'; status.reason = '自动回复已关闭，需手动开启'; }
+    if (!hasAutomaticReplies(this.data) || !this.config.enabled) { status.phase = 'paused'; status.reason = '未启用自动回复，请开启对应分类或常用语'; }
     else if (status.phase === 'idle' && pending) { status.phase = 'waiting'; status.reason = '正在按到达顺序准备回复'; }
     const issue = [...this.records.values()].filter((record) => record.status === 'ready' && record.error)
       .sort((a, b) => b.updatedAt - a.updatedAt)[0];
-    if (issue && this.data.globalAutoReply && this.config.enabled) status.reason = [status.reason, `待人工检查：${issue.error}`].filter(Boolean).join('；');
+    if (issue && hasAutomaticReplies(this.data) && this.config.enabled) status.reason = [status.reason, `待人工检查：${issue.error}`].filter(Boolean).join('；');
     // Runtime diagnostics stay in storage. Automatic customer service does not
     // add a queue counter, pause button or status panel to the chat window.
     if (Date.now() - this.lastStatusAt >= 1000) {
@@ -414,7 +412,7 @@ export class BusinessReplies {
     }
   }
   private async pumpAuto(): Promise<void> {
-    if (this.autoBusy || this.pageGone || !this.adapterStateReady || !this.data?.globalAutoReply
+    if (this.autoBusy || this.pageGone || !this.adapterStateReady || !(this.data && hasAutomaticReplies(this.data))
       || !this.config?.enabled || this.autoState.phase !== 'idle' || this.editorSession?.open || this.editorSession?.busy || this.manualSending.size) return;
     // Preparation may run concurrently, but the oldest incoming record must
     // finish preparation before a later one can take the native interface.
@@ -444,7 +442,7 @@ export class BusinessReplies {
         await this.update(record, { status: 'ready', manualOnly: true, error: '回复配置已变化，请检查草稿或重新生成' }); return;
       }
       this.autoMessageId = record.message.id;
-      await this.action('SEND_REPLY', record, this.coverImages(record), undefined, { queueToken: lease.token, preparedReply: record.preparedReply });
+      await this.action('SEND_REPLY', record, this.draftImages(record), undefined, { queueToken: lease.token, preparedReply: record.preparedReply });
       await this.finishDraft(record, 'sent');
     } catch (error) {
       if (record && !this.completed.has(record.message.id)) {
@@ -473,6 +471,8 @@ export class BusinessReplies {
   }
 
   private async incomingChinese(message: IncomingBusinessMessage): Promise<string> {
+    const greeting = simpleGreetingChinese(message.text);
+    if (greeting) return greeting;
     const config = this.config!;
     if (config.nativeLang === 'zh-CN') {
       const cached = await this.history.translation(message.id, message.text, translationContext(config));
@@ -504,18 +504,9 @@ export class BusinessReplies {
     try { return await request; }
     finally { if (this.translationsInFlight.get(key) === request) this.translationsInFlight.delete(key); }
   }
-  private coverImages(record: BusinessRuntimeRecord): ProductImage[] {
-    if (record.productPriceOnly) return [];
-    const product = this.data?.products.find((item) => item.id === record.productIds?.[0]);
-    const image = product?.images.find((item) => item.id === product.coverImageId) ?? product?.images[0];
-    return image ? [image] : [];
-  }
   private draftImages(record: BusinessRuntimeRecord): ProductImage[] {
-    if (record.productPriceOnly) return [];
     const product = this.data?.products.find((item) => item.id === record.productIds?.[0]);
-    if (!product) return [];
-    const cover = this.coverImages(record)[0];
-    return (cover ? [cover, ...product.images.filter((image) => image.id !== cover.id)] : product.images).slice(0, 6);
+    return productReplyImages(product, record.productPriceOnly);
   }
   private async action<T = void>(kind: string, record: BusinessRuntimeRecord, images: ProductImage[] = [], replaceText?: string, extra: Record<string, unknown> = {}): Promise<T> {
     const id = newRpcId();
@@ -655,7 +646,7 @@ export class BusinessReplies {
     const queue = [...this.records.values()].filter((item) => item.message.chatId === this.chatId && item.status === 'ready'
       // Old manual records must not fill the editor and block new automatic
       // tasks. A failed automatic attempt is never reinserted as a manual job.
-      && (!this.data?.globalAutoReply || item.message.receivedAt >= this.startedAt && !item.preparedReply))
+      && (!(this.data && hasAutomaticReplies(this.data)) || item.message.receivedAt >= this.startedAt && !item.preparedReply))
       .sort(compareBusinessArrival);
     const record = queue.find((item) => item.message.id === this.focusedDraftId) ?? queue[0];
     const editorRecord = queue.find((item) => this.mediaPreviews.has(item.message.id) || this.inserted.has(item.message.id))

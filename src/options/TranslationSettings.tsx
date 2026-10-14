@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { LANGUAGES } from '@/shared/languages';
+import { ToggleSwitch } from '@/shared/ui/ToggleSwitch';
 import { DEFAULT_CONFIG, type Config, type Provider } from '@/shared/types';
 import { DEFAULT_TRANSLATION_PROMPT, translationScenePrompt } from '@/shared/translation-policy';
 
@@ -20,7 +21,7 @@ export function TranslationSettings({ config, onSave }: { config: Config; onSave
   const setModel = (provider: Provider, model: string) => onSave({ model: { ...config.model, [provider]: model } });
   return <>
       <section className="opts-section">
-        <h2>Language settings</h2>
+        <h2>语言设置</h2>
         <div className="opts-row">
           <label htmlFor="native-lang">我的母语</label>
           <select
@@ -30,12 +31,12 @@ export function TranslationSettings({ config, onSave }: { config: Config; onSave
           >
             {LANGUAGES.map((l) => (
               <option key={l.code} value={l.code}>
-                {l.native} ({l.name})
+                {l.label}
               </option>
             ))}
           </select>
           <div className="opts-help">
-            Used as the source for outbound translation. Inbound messages always auto-detect.
+            发送消息时，以此语言作为原文语言；收到消息时，自动识别对方使用的语言。
           </div>
         </div>
         <div className="opts-row">
@@ -47,18 +48,18 @@ export function TranslationSettings({ config, onSave }: { config: Config; onSave
           >
             {LANGUAGES.map((l) => (
               <option key={l.code} value={l.code}>
-                {l.native} ({l.name})
+                {l.label}
               </option>
             ))}
           </select>
           <div className="opts-help">
-            Outgoing messages are translated into this language. Incoming messages are translated into 我的母语.
+            发送的消息会翻译成此语言；收到的消息会翻译成你的母语。
           </div>
         </div>
       </section>
 
       <section className="opts-section">
-        <h2>AI provider</h2>
+        <h2>AI 服务商</h2>
         <div className="opts-providers">
           {PROVIDERS.map((p) => (
             <div
@@ -74,7 +75,7 @@ export function TranslationSettings({ config, onSave }: { config: Config; onSave
         {PROVIDERS.map((p) => (
           <div key={p.id} style={{ display: config.provider === p.id ? 'block' : 'none' }}>
             <div className="opts-row">
-              <label htmlFor={`apikey-${p.id}`}>{p.label} API key</label>
+              <label htmlFor={`apikey-${p.id}`}>{p.label} API 密钥</label>
               <input
                 id={`apikey-${p.id}`}
                 type="password"
@@ -83,11 +84,11 @@ export function TranslationSettings({ config, onSave }: { config: Config; onSave
                 onChange={(e) => setApiKey(p.id, e.target.value)}
               />
               <div className="opts-help">
-                Stored locally in <code>chrome.storage.local</code>. Never synced.
+                密钥仅保存在当前浏览器本地，不会同步到其他设备。
               </div>
             </div>
             <div className="opts-row">
-              <label htmlFor={`model-${p.id}`}>Model</label>
+              <label htmlFor={`model-${p.id}`}>AI 模型</label>
               <input
                 id={`model-${p.id}`}
                 type="text"
@@ -151,18 +152,12 @@ export function TranslationSettings({ config, onSave }: { config: Config; onSave
       </section>
 
       <section className="opts-section">
-        <h2>Enable</h2>
-        <div className="opts-toggle">
-          <input
-            id="enabled"
-            type="checkbox"
-            checked={config.enabled}
-            onChange={(e) => setAndSave({ enabled: e.target.checked })}
-          />
-          <label htmlFor="enabled">Enable translation hooks</label>
-        </div>
+        <h2>插件启用</h2>
+        <ToggleSwitch id="enabled" label="启用翻译插件" checked={config.enabled}
+          description={config.enabled ? '翻译及已开启的自动回复规则可以运行' : '翻译及自动回复已暂停'}
+          onChange={(enabled) => setAndSave({ enabled })} />
         <div className="opts-help">
-          Reload web.whatsapp.com after toggling.
+          更改开关后，请刷新 WhatsApp 网页使设置生效。
         </div>
       </section>
 

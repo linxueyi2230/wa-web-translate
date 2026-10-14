@@ -3,7 +3,7 @@ import type { TranslateRequest, TranslateResult } from '@/shared/types';
 import { buildPrompt, parseModelOutput } from './prompt';
 import { callModel } from './providers';
 import type { RpcMessage, TranslateRpcRequest } from '@/shared/messages';
-import { BUSINESS_CONTEXT_PREFIX, BUSINESS_RUNTIME_PREFIX, businessSettingsSignature, compareBusinessArrival, containsPriceContent, hasPriceIntent, type BusinessRuntimeRecord, type IncomingBusinessMessage } from '@/shared/business-replies';
+import { BUSINESS_CONTEXT_PREFIX, BUSINESS_RUNTIME_PREFIX, businessSettingsSignature, compareBusinessArrival, automaticCategoriesEnabled, type BusinessRuntimeRecord, type IncomingBusinessMessage } from '@/shared/business-replies';
 import { parseMessageId } from '@/shared/message-history';
 import { AUTO_LEASE_MS, BUSINESS_AUTO_LEASE_KEY, BUSINESS_AUTO_STATUS_KEY, BUSINESS_AUTO_ORDER_KEY, type BusinessAutoLease } from '@/shared/business-auto';
 import { translationContext } from '@/shared/message-history';
@@ -224,12 +224,9 @@ async function handleBusinessRuntime(msg: any, sender: chrome.runtime.MessageSen
   if (msg.kind === 'BUSINESS_RUNTIME_CAN_SEND' || msg.kind === 'BUSINESS_RUNTIME_CHECK_SEND') {
     const finalCheck = msg.kind === 'BUSINESS_RUNTIME_CHECK_SEND';
     if (record.owner !== msg.owner || record.status !== (finalCheck ? 'sending' : 'queued') || record.manualOnly
-      || !record.reply?.trim() || !record.preparedReply?.trim() || hasPriceIntent(record.translated ?? '') || containsPriceContent(record.reply) || (record.productIds?.length ?? 0) > 1
-      || containsPriceContent(record.preparedReply ?? '')
-      || record.categories?.length !== 1) return false;
+      || !record.reply?.trim() || !record.preparedReply?.trim() || (record.productIds?.length ?? 0) > 1) return false;
     const [business, config] = await Promise.all([loadBusinessData(), loadConfig()]);
-    const category = record.categories[0];
-    if (!config.enabled || !business.globalAutoReply || !business.autoReply[category]) return false;
+    if (!config.enabled || !automaticCategoriesEnabled(business, record.categories, record.phraseIds)) return false;
     if (record.settingsSignature && record.settingsSignature !== businessSettingsSignature(business)) return false;
     if (record.translationContext !== translationContext(config)) return false;
     if (finalCheck) return Date.now() - record.updatedAt < 60_000;

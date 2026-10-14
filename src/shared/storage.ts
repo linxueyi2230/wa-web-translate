@@ -1,4 +1,5 @@
 import { DEFAULT_BUSINESS_DATA, DEFAULT_CONFIG, type BusinessData, type Config } from './types';
+import { LEGACY_DEFAULT_TRANSLATION_STYLE } from './translation-policy';
 
 const KEY_CONFIG = 'config';
 const KEY_BUSINESS = 'businessData:v1';
@@ -9,6 +10,7 @@ export async function loadConfig(): Promise<Config> {
   return {
     ...DEFAULT_CONFIG,
     ...stored,
+    personality: stored.personality === LEGACY_DEFAULT_TRANSLATION_STYLE ? DEFAULT_CONFIG.personality : stored.personality ?? DEFAULT_CONFIG.personality,
     translationPrompt: typeof stored.translationPrompt === 'string' ? stored.translationPrompt : DEFAULT_CONFIG.translationPrompt,
     apiKeys: { ...DEFAULT_CONFIG.apiKeys, ...(stored.apiKeys ?? {}) },
     model: { ...DEFAULT_CONFIG.model, ...(stored.model ?? {}) },
@@ -29,10 +31,13 @@ export function saveConfig(patch: Partial<Config>): Promise<Config> {
 
 export async function loadBusinessData(): Promise<BusinessData> {
   const got = await chrome.storage.local.get(KEY_BUSINESS);
-  const stored = (got[KEY_BUSINESS] ?? {}) as Partial<BusinessData>;
+  const { globalAutoReply: _global, riskConfirmed: _risk, ...stored } = (got[KEY_BUSINESS] ?? {}) as
+    Partial<BusinessData> & { globalAutoReply?: unknown; riskConfirmed?: unknown };
   return {
     ...DEFAULT_BUSINESS_DATA,
     ...stored,
+    activeTab: stored.activeTab === 'auto' ? 'settings' : stored.activeTab ?? DEFAULT_BUSINESS_DATA.activeTab,
+    phrases: Array.isArray(stored.phrases) ? stored.phrases : [],
     // Upgrade the old built-in schedule without replacing custom dispatch text.
     dispatchText: stored.dispatchText === '通常当天下午安排发货，节假日可能顺延。'
       ? DEFAULT_BUSINESS_DATA.dispatchText : stored.dispatchText ?? DEFAULT_BUSINESS_DATA.dispatchText,

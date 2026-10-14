@@ -1,5 +1,5 @@
 import type { LanguageCode } from './languages';
-import { DEFAULT_TRANSLATION_PROMPT } from './translation-policy';
+import { DEFAULT_TRANSLATION_PROMPT, DEFAULT_TRANSLATION_STYLE } from './translation-policy';
 
 export type Provider = 'deepseek' | 'anthropic' | 'openai' | 'google';
 
@@ -14,7 +14,8 @@ export interface Config {
   enabled: boolean;
 }
 
-export type ReplyCategory = 'product' | 'payment' | 'shipping' | 'trust';
+export type BuiltinReplyCategory = 'product' | 'payment' | 'shipping' | 'trust';
+export type ReplyCategory = BuiltinReplyCategory | 'phrase';
 export type ReplyLanguage = 'zh-CN' | 'es-MX';
 
 export interface ReplyKeyword {
@@ -52,6 +53,16 @@ export interface PaymentMethod {
   enabled: boolean;
 }
 
+export interface CommonPhrase {
+  id: string;
+  title: string;
+  content: string;
+  language: ReplyLanguage;
+  enabled: boolean;
+  keywords: ReplyKeyword[];
+  updatedAt: number;
+}
+
 export interface BusinessData {
   version: 1;
   activeTab: string;
@@ -70,9 +81,8 @@ export interface BusinessData {
   trustText: string;
   customerGroupUrl: string;
   includeGroupInvite: boolean;
-  globalAutoReply: boolean;
-  riskConfirmed: boolean;
-  autoReply: Record<ReplyCategory, boolean>;
+  phrases: CommonPhrase[];
+  autoReply: Record<BuiltinReplyCategory, boolean>;
 }
 
 export function newKeyword(text: string, source: ReplyKeyword['source'] = 'manual'): ReplyKeyword {
@@ -102,14 +112,13 @@ export const DEFAULT_BUSINESS_DATA: BusinessData = {
   trustText: '交易绝对安全真实可靠，您付款后，我将会和财务核实付款信息，收到付款后会安排发货。',
   customerGroupUrl: '',
   includeGroupInvite: false,
-  globalAutoReply: false,
-  riskConfirmed: false,
+  phrases: [],
   autoReply: { product: false, payment: false, shipping: false, trust: false },
 };
 
 export const DEFAULT_CONFIG: Config = {
-  nativeLang: 'en',
-  targetLang: 'zh-CN',
+  nativeLang: 'zh-CN',
+  targetLang: 'es',
   provider: 'deepseek',
   apiKeys: {},
   model: {
@@ -119,7 +128,7 @@ export const DEFAULT_CONFIG: Config = {
     google: 'gemini-2.0-flash',
   },
   translationPrompt: DEFAULT_TRANSLATION_PROMPT,
-  personality: 'Translate naturally and idiomatically. Match the tone of the original message (casual chat stays casual, formal stays formal). Preserve emojis. Do not add explanations.',
+  personality: DEFAULT_TRANSLATION_STYLE,
   enabled: true,
 };
 

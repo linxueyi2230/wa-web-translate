@@ -2,6 +2,10 @@
 // not reused with a different meaning policy. Saved sent originals stay intact.
 export const TRANSLATION_POLICY_VERSION = 'trade-v4';
 
+export const DEFAULT_TRANSLATION_STYLE = '翻译应自然、地道，保持原文语气：日常聊天用日常表达，正式内容用正式表达。保留表情，不添加解释。';
+// Replace only the old built-in English guidance; custom saved text is retained.
+export const LEGACY_DEFAULT_TRANSLATION_STYLE = 'Translate naturally and idiomatically. Match the tone of the original message (casual chat stays casual, formal stays formal). Preserve emojis. Do not add explanations.';
+
 export const DEFAULT_TRANSLATION_PROMPT = [
   '使用场景：WhatsApp 外贸客户沟通。卖家主要使用中文，客户主要来自墨西哥。',
   '围绕商品介绍、型号尺码、报价、付款、银行转账、OXXO、物流、发货时间和交易信任，使用自然、清楚、礼貌的商业聊天表达。',
