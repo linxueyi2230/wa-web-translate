@@ -1,9 +1,17 @@
 node_modules
+.yarn/install-state.gz
+.yarn/cache/
+.yarn/unplugged/
 dist
 .vite
 *.log
 .DS_Store
-.env
-.env.local
 mitm_mcp_traffic.db
 tsconfig.tsbuildinfo
+__pycache__/
+
+# Local credentials and agent reference caches stay outside version control.
+.env*
+!.env.example
+!**/.env*.example
+.agents/

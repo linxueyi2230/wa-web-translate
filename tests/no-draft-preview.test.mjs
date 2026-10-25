@@ -31,7 +31,7 @@ after(() => { console.info = previousInfo; });
 
 const requests = [];
 const records = {
-  config: { nativeLang: 'zh-CN', targetLang: 'en', enabled: true, provider: 'deepseek' },
+  config: { nativeLang: 'zh-CN', targetLang: 'en', active: true, provider: 'deepseek' },
 };
 const messageListeners = [];
 globalThis.chrome = {

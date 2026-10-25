@@ -34,7 +34,7 @@ test('the product editor saves English and Spanish multiline quotes while preser
   for (const [count, quote] of [[2, 'Model A: 250 MXN\nModel B: 300 MXN'], [6, 'Modelo A: $250\nModelo B: $300']]) {
     const business = structuredClone(DEFAULT_BUSINESS_DATA); business.activeTab = 'product';
     const images = Array.from({ length: count }, (_, index) => ({ id: `photo-${index}`, name: `${index}.png`, dataUrl: 'data:image/png;base64,aGVsbG8=' }));
-    business.products = [{ id: 'one', name: 'Product', model: 'A', description: '', price: '250', currency: 'MXN', images, coverImageId: images[1].id, keywords: [], enabled: true, updatedAt: Date.now() }];
+    business.products = [{ id: 'one', name: 'Product', model: 'A', description: '', price: '250', currency: 'MXN', images, coverImageId: images[1].id, keywords: [], active: true, updatedAt: Date.now() }];
     stored['businessData:v1'] = business;
     await act(async () => root.render(createElement(OptionsApp, { key: count })));
     await click('编辑');
@@ -110,7 +110,7 @@ test('common phrase list starts empty and supports add, edit, enable, disable, k
   }
   assert.equal(document.querySelectorAll('.opts-phrase-row').length, 2);
   assert.deepEqual(stored['businessData:v1'].phrases.map((phrase) => phrase.title), ['欢迎语', '订单提醒']);
-  assert.ok(stored['businessData:v1'].phrases.every((phrase) => phrase.enabled && phrase.language === 'es-MX'));
+  assert.ok(stored['businessData:v1'].phrases.every((phrase) => phrase.active && phrase.language === 'es-MX'));
   await act(async () => [...document.querySelector('.opts-phrase-row').querySelectorAll('button')].find((button) => button.textContent === '编辑').click());
   assert.equal(document.querySelector('[aria-label="启用此常用语"]').getAttribute('role'), 'switch');
   await fill('常用语标题 *', '新欢迎语'); await fill('常用语回复内容', 'Hola de nuevo'); await fill('修改关键词hola', 'bienvenido');
@@ -121,13 +121,13 @@ test('common phrase list starts empty and supports add, edit, enable, disable, k
   await click('保存常用语');
   assert.equal(stored['businessData:v1'].phrases[0].content, 'Hola de nuevo');
   assert.equal(stored['businessData:v1'].phrases[0].keywords[0].text, 'bienvenido');
-  assert.equal(stored['businessData:v1'].phrases[0].keywords[0].enabled, false);
+  assert.equal(stored['businessData:v1'].phrases[0].keywords[0].active, false);
   assert.match(document.querySelector('.opts-phrase-row').textContent, /请启用触发关键词/);
   const phraseSwitch = document.querySelector('[aria-label="启用新欢迎语"]');
   assert.equal(phraseSwitch.getAttribute('role'), 'switch');
   assert.equal(phraseSwitch.getAttribute('aria-checked'), 'true');
   await act(async () => phraseSwitch.click());
-  assert.equal(stored['businessData:v1'].phrases[0].enabled, false);
+  assert.equal(stored['businessData:v1'].phrases[0].active, false);
   assert.equal(phraseSwitch.getAttribute('aria-checked'), 'false');
   assert.match(document.querySelector('.opts-phrase-row').textContent, /已关闭/);
   assert.equal(document.querySelector('input[type="checkbox"]'), null);
@@ -142,25 +142,25 @@ test('plugin, payment method, business keyword and group invitation controls are
   const business = structuredClone(DEFAULT_BUSINESS_DATA);
   stored['businessData:v1'] = business; stored.config = structuredClone(DEFAULT_CONFIG);
   await act(async () => root.render(createElement(OptionsApp, { key: 'all-switches' })));
-  const plugin = document.querySelector('#enabled');
+  const plugin = document.querySelector('#active');
   assert.equal(plugin.getAttribute('role'), 'switch');
   assert.equal(document.querySelector('input[type="checkbox"]'), null);
   await act(async () => plugin.click());
-  assert.equal(stored.config.enabled, false);
+  assert.equal(stored.config.active, false);
   assert.match(plugin.textContent, /已关闭/);
   await act(async () => plugin.click());
-  assert.equal(stored.config.enabled, true);
+  assert.equal(stored.config.active, true);
   await click('支付方式');
   const method = business.paymentMethods[0];
   const payment = document.querySelector(`[aria-label="启用${method.name}"]`);
   assert.equal(payment.getAttribute('role'), 'switch');
   await act(async () => payment.click());
-  assert.equal(stored['businessData:v1'].paymentMethods[0].enabled, false);
+  assert.equal(stored['businessData:v1'].paymentMethods[0].active, false);
   const keyword = business.paymentKeywords[0];
   const keywordToggle = document.querySelector(`[aria-label="启用关键词${keyword.text}"]`);
   assert.equal(keywordToggle.getAttribute('role'), 'switch');
   await act(async () => keywordToggle.click());
-  assert.equal(stored['businessData:v1'].paymentKeywords[0].enabled, false);
+  assert.equal(stored['businessData:v1'].paymentKeywords[0].active, false);
   assert.equal(document.querySelector('input[type="checkbox"]'), null);
   await click('信任与保障');
   const invite = document.querySelector('#include-group');

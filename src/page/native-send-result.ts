@@ -17,7 +17,7 @@ export function nativeMessageIds(chat: any): Set<string> {
 // A resolved native call can mean only "queued". Accept an explicit OK result
 // or the matching new outgoing model's ACK >= SENT(1), never CLOCK(0).
 export async function confirmNativeSendResult(result: any, chat: any, chatId: string, text: string, media: boolean,
-  before: Set<string>, validate: () => void, confirmedIds?: Set<string>): Promise<void> {
+  before: Set<string>, validate: () => void, confirmedIds?: Set<string>, mediaKind: 'image' | 'audio' = 'image'): Promise<void> {
   const values: any[] = [];
   const visited = new WeakSet<object>();
   let rejection: unknown;
@@ -58,7 +58,7 @@ export async function confirmNativeSendResult(result: any, chat: any, chatId: st
       const id = messageKey(modelField(model, 'id'));
       const key = id ? parseMessageId(id) : null;
       if (!id || before.has(id) || confirmedIds?.has(id) || !key?.fromMe || key.chatId !== normalizeChatId(chatId) || returnedIds.size && !returnedIds.has(id)) continue;
-      if (media && modelField(model, 'type') !== 'image') continue;
+      if (media && (mediaKind === 'image' ? modelField(model, 'type') !== 'image' : !['audio', 'ptt'].includes(String(modelField(model, 'type'))))) continue;
       if (!media && modelField(model, 'type') && modelField(model, 'type') !== 'chat') continue;
       if ([modelField(model, 'caption'), modelField(model, 'body')]
         .some((body) => typeof body === 'string' && comparableText(body) === comparableText(text))) matches.set(id, model);

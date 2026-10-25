@@ -102,8 +102,8 @@ export function formatReplyParts(parts: readonly Pick<ReplyPart, 'text' | 'label
 }
 
 export function usablePhrase(phrase: CommonPhrase): boolean {
-  return phrase.enabled && Boolean(phrase.title.trim() && phrase.content.trim())
-    && phrase.keywords.some((keyword) => keyword.enabled && keyword.text.trim());
+  return phrase.active && Boolean(phrase.title.trim() && phrase.content.trim())
+    && phrase.keywords.some((keyword) => keyword.active && keyword.text.trim());
 }
 
 export function hasAutomaticReplies(data: BusinessData): boolean {
@@ -160,7 +160,7 @@ export function matchesKeyword(text: string, keyword: string): boolean {
     const information = /^(商品|产品)(信息|详情)$/.exec(term);
     if (information) {
       // Translation can produce “产品的信息” or “产品的更多信息”. Keep the
-      // user's enabled phrase, allowing only these narrow grammatical variants.
+      // user's active phrase, allowing only these narrow grammatical variants.
       return new RegExp(`${information[1]}(?:的)?(?:(?:更多|详细|全部|所有|基本|相关|一些)(?:的)?){0,2}${information[2]}`).test(source);
     }
     return false;
@@ -169,7 +169,7 @@ export function matchesKeyword(text: string, keyword: string): boolean {
   return new RegExp(`(^|[^\\p{L}\\p{N}_])${escaped}($|[^\\p{L}\\p{N}_])`, 'u').test(source);
 }
 export function matchesKeywords(text: string, keywords: ReplyKeyword[]): boolean {
-  return keywords.some((keyword) => keyword.enabled && matchesKeyword(text, keyword.text));
+  return keywords.some((keyword) => keyword.active && matchesKeyword(text, keyword.text));
 }
 
 const GREETING_WORDS = new Set(['你好', '您好', '嗨', '哈喽', 'hola', 'hello', 'hi']);
@@ -182,7 +182,7 @@ export function simpleGreetingChinese(text: string): string | undefined {
 
 export function matchesPhraseKeywords(text: string, keywords: ReplyKeyword[]): boolean {
   return keywords.some((keyword) => {
-    if (!keyword.enabled) return false;
+    if (!keyword.active) return false;
     if (matchesKeyword(text, keyword.text)) return true;
     if (!GREETING_WORDS.has(normalized(keyword.text))) return false;
     // Greeting translations vary between “你好”, “您好” and “嗨”. Match
@@ -235,7 +235,7 @@ export function shippingReplyText(data: Pick<BusinessData, 'shippingLanguage' | 
 }
 
 export function buildReplyPlan(text: string, data: BusinessData, lastCategory?: ReplyCategory, selectedProductId?: string, originalText?: string): ReplyPlan {
-  const enabledProducts = data.products.filter((product) => product.enabled);
+  const enabledProducts = data.products.filter((product) => product.active);
   let products = enabledProducts.filter((product) => matchesKeywords(text, product.keywords));
   const priceRequested = hasPriceIntent(text);
   const showProductPrice = priceRequested && !NON_PRODUCT_PRICE_TERMS.some((term) => matchesKeyword(text, term));
@@ -243,10 +243,10 @@ export function buildReplyPlan(text: string, data: BusinessData, lastCategory?: 
   const productPriceOnly = products.length > 0 && showProductPrice && !hasProductInformationIntent(text);
   const paymentMatched = matchesKeywords(text, data.paymentKeywords.filter((keyword) => lastCategory === 'payment' || !CONTEXT_PAYMENT_TERMS.includes(keyword.text)));
   const paymentOptions = paymentMatched && [...ALTERNATIVE_TERMS, ...CONTEXT_PAYMENT_TERMS].some((term) => matchesKeyword(text, term));
-  const paymentMethods = data.paymentMethods.filter((method) => method.enabled && method.name.trim() && method.content.trim());
+  const paymentMethods = data.paymentMethods.filter((method) => method.active && method.name.trim() && method.content.trim());
   const explicitMethod = paymentMethods.find((method) => matchesKeyword(text, method.name)
-    && (paymentMatched || lastCategory === 'payment' && data.paymentKeywords.some((keyword) => keyword.enabled))
-    && !data.paymentKeywords.some((keyword) => !keyword.enabled && normalized(keyword.text) === normalized(method.name)));
+    && (paymentMatched || lastCategory === 'payment' && data.paymentKeywords.some((keyword) => keyword.active))
+    && !data.paymentKeywords.some((keyword) => !keyword.active && normalized(keyword.text) === normalized(method.name)));
   const categories: ReplyCategory[] = [];
   if (products.length) categories.push('product');
   if (paymentMatched || explicitMethod) categories.push('payment');

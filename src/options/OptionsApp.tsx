@@ -1,3 +1,4 @@
+import { uiStrings } from '../shared/ui/resources';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { TranslationSettings } from './TranslationSettings';
 import { ClipboardTextField } from './ClipboardTextField';
@@ -135,8 +136,8 @@ export function OptionsApp() {
   const renderKeywords = (category: BuiltinReplyCategory, items: ReplyKeyword[]) => (
     <div className="opts-keywords">
       <div className="opts-keyword-list">
-        {items.filter((keyword) => keyword.text).map((keyword) => <span key={keyword.id} className="opts-keyword" data-enabled={keyword.enabled}>
-          <ToggleSwitch compact label={`启用关键词${keyword.text}`} checked={keyword.enabled} onChange={(enabled) => updateKeyword(category, keyword.id, { enabled })} />
+        {items.filter((keyword) => keyword.text).map((keyword) => <span key={keyword.id} className="opts-keyword" data-active={keyword.active}>
+          <ToggleSwitch compact label={`启用关键词${keyword.text}`} checked={keyword.active} onChange={(active) => updateKeyword(category, keyword.id, { active })} />
           <button type="button" className="opts-keyword-edit" aria-label={`修改${keyword.text}`} onClick={() => {
             const replacement = window.prompt('修改中文关键词', keyword.text)?.trim();
             if (!replacement) return;
@@ -171,18 +172,18 @@ export function OptionsApp() {
     if (!saved) return;
     setEditing(null); setAdding(false); setSuggestions([]); setSelectedSuggestions([]);
   };
-  const newProduct = (): Product => ({ id: crypto.randomUUID(), name: '', model: '', description: '', price: '', currency: DEFAULT_PRODUCT_CURRENCY, images: [], coverImageId: '', keywords: DEFAULT_PRODUCT_KEYWORDS.map((text) => newKeyword(text, 'default')), enabled: true, updatedAt: Date.now() });
+  const newProduct = (): Product => ({ id: crypto.randomUUID(), name: '', model: '', description: '', price: '', currency: DEFAULT_PRODUCT_CURRENCY, images: [], coverImageId: '', keywords: DEFAULT_PRODUCT_KEYWORDS.map((text) => newKeyword(text, 'default')), active: true, updatedAt: Date.now() });
   const productItems = data.products.filter((p) => `${p.name} ${p.model}`.toLowerCase().includes(search.toLowerCase()));
 
   return <div className="opts-shell opts-shell-wide">
-    <h1>WhatsApp 外贸助手</h1>
+    <h1>{uiStrings.appName}</h1>
     <p className="opts-sub">WhatsApp 外贸回复配置保存在当前浏览器。业务回复目标语言为墨西哥西班牙语。</p>
     <nav className="opts-tabs" aria-label="配置分类">{TABS.map(([id, label]) => <button key={id} type="button" aria-selected={activeTab === id} onClick={() => setTab(id)}>{label}</button>)}</nav>
 
     {activeTab === 'settings' && <TranslationSettings config={config} onSave={setAndSaveConfig} />}
 
     {activeTab === 'product' && <section className="opts-section opts-section-first"><div className="opts-heading"><div><h2>商品资料</h2><p className="opts-help">一条商品对应一个具体型号。商品回复目标为墨西哥西班牙语。</p></div><button className="opts-primary" disabled={Boolean(editing)} onClick={() => { setEditing(newProduct()); setAdding(true); setSuggestions([]); setKeywordDraft(''); }}>新建商品</button></div>
-      <CategorySwitch category="product" enabled={data.autoReply.product} pluginEnabled={config.enabled} onChange={(enabled) => { void updateBusiness((p) => ({ ...p, autoReply: { ...p.autoReply, product: enabled } })); }} />
+      <CategorySwitch category="product" active={data.autoReply.product} pluginEnabled={config.active} onChange={(active) => { void updateBusiness((p) => ({ ...p, autoReply: { ...p.autoReply, product: active } })); }} />
       <div className="opts-row"><label>所有商品的内容语言</label>{languageSelect(data.productLanguage, (value) => updateBusiness((p) => ({ ...p, productLanguage: value })))}</div>
       {(adding || editing) ? <ProductEditor key={editing!.id} product={editing!} imageLimitBytes={imageLimitBytes} onChange={setEditing} generating={generatingKeywords} onCancel={() => { setEditing(null); setAdding(false); setSuggestions([]); }} onSave={saveProduct} renderKeywords={renderKeywords} suggestions={suggestions} selectedSuggestions={selectedSuggestions} onSuggestionChange={setSelectedSuggestions} onGenerate={async () => {
         if (!editing?.name.trim() || generatingKeywords) { flash('请先填写商品名称', true); return; }
@@ -208,21 +209,21 @@ export function OptionsApp() {
         setSuggestions([]); setSelectedSuggestions([]);
       }} /> : <>
         <div className="opts-search"><input aria-label="搜索商品" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索商品名称或型号" /></div>
-        <div className="opts-product-list">{productItems.map((product) => <div className="opts-product-row" key={product.id}><div className="opts-product-thumb">{product.images.find((image) => image.id === product.coverImageId) ? <img src={product.images.find((image) => image.id === product.coverImageId)!.dataUrl} /> : <span>无图片</span>}</div><div className="opts-product-main"><strong>{product.name}</strong><span>型号：{product.model || '—'} · {product.price ? isNumericProductPrice(product.price) ? `${product.price} ${product.currency}` : product.price : '未填写价格'}</span><small>{product.keywords.filter((k) => k.enabled).length} 个启用关键词 · {product.enabled ? '已启用' : '已停用'}</small></div><button type="button" onClick={() => { setEditing(product); setAdding(false); setSuggestions([]); setKeywordDraft(''); }}>编辑</button><button type="button" className="opts-danger-link" onClick={() => { if (window.confirm(`确定删除“${product.name}”吗？`)) updateBusiness((p) => ({ ...p, products: p.products.filter((item) => item.id !== product.id) })); }}>删除</button></div>)}{productItems.length === 0 && <div className="opts-empty">{data.products.length ? '没有匹配的商品，请修改搜索条件。' : '还没有商品，点击“新建商品”添加第一条。'}</div>}</div>
+        <div className="opts-product-list">{productItems.map((product) => <div className="opts-product-row" key={product.id}><div className="opts-product-thumb">{product.images.find((image) => image.id === product.coverImageId) ? <img src={product.images.find((image) => image.id === product.coverImageId)!.dataUrl} /> : <span>无图片</span>}</div><div className="opts-product-main"><strong>{product.name}</strong><span>型号：{product.model || '—'} · {product.price ? isNumericProductPrice(product.price) ? `${product.price} ${product.currency}` : product.price : '未填写价格'}</span><small>{product.keywords.filter((k) => k.active).length} 个启用关键词 · {product.active ? '已启用' : '已停用'}</small></div><button type="button" onClick={() => { setEditing(product); setAdding(false); setSuggestions([]); setKeywordDraft(''); }}>编辑</button><button type="button" className="opts-danger-link" onClick={() => { if (window.confirm(`确定删除“${product.name}”吗？`)) updateBusiness((p) => ({ ...p, products: p.products.filter((item) => item.id !== product.id) })); }}>删除</button></div>)}{productItems.length === 0 && <div className="opts-empty">{data.products.length ? '没有匹配的商品，请修改搜索条件。' : '还没有商品，点击“新建商品”添加第一条。'}</div>}</div>
       </>}
     </section>}
 
     {activeTab === 'payment' && <>
-      <CategorySwitch category="payment" enabled={data.autoReply.payment} pluginEnabled={config.enabled} onChange={(enabled) => updateBusiness((p) => ({ ...p, autoReply: { ...p.autoReply, payment: enabled } }))} />
+      <CategorySwitch category="payment" active={data.autoReply.payment} pluginEnabled={config.active} onChange={(active) => updateBusiness((p) => ({ ...p, autoReply: { ...p.autoReply, payment: active } }))} />
       <section className="opts-section"><h2>支付关键词</h2>{renderKeywords('payment', data.paymentKeywords)}</section>
-      <section className="opts-section"><div className="opts-heading"><div><h2>收款方式</h2><p className="opts-help">默认方式留空时不会发送；客户表示不方便时展示已填写的备用方式。中文付款草稿先填入中文，你确认发送时才翻译为西语；西语内容原文发送。</p></div><button className="opts-secondary" onClick={() => updateBusiness((p) => ({ ...p, paymentMethods: [...p.paymentMethods, { id: crypto.randomUUID(), name: '', content: '', isDefault: false, enabled: true }] }))}>添加方式</button></div>
+      <section className="opts-section"><div className="opts-heading"><div><h2>收款方式</h2><p className="opts-help">默认方式留空时不会发送；客户表示不方便时展示已填写的备用方式。中文付款草稿先填入中文，你确认发送时才翻译为西语；西语内容原文发送。</p></div><button className="opts-secondary" onClick={() => updateBusiness((p) => ({ ...p, paymentMethods: [...p.paymentMethods, { id: crypto.randomUUID(), name: '', content: '', isDefault: false, active: true }] }))}>添加方式</button></div>
         <div className="opts-row"><label>回复内容语言</label>{languageSelect(data.paymentLanguage, (value) => updateBusiness((p) => ({ ...p, paymentLanguage: value })))}</div>
         {data.paymentMethods.map((method) => <PaymentEditor key={method.id} method={method} onChange={(patch) => updateBusiness((p) => ({ ...p, paymentMethods: p.paymentMethods.map((m) => m.id === method.id ? { ...m, ...patch } : { ...m, isDefault: patch.isDefault ? false : m.isDefault }) }))} onDelete={() => updateBusiness((p) => ({ ...p, paymentMethods: p.paymentMethods.filter((m) => m.id !== method.id), ...(method.isDefault ? { paymentMethods: p.paymentMethods.filter((m) => m.id !== method.id).map((m, i) => ({ ...m, isDefault: i === 0 })) } : {}) }))} />)}
       </section>
     </>}
 
     {activeTab === 'shipping' && <>
-      <CategorySwitch category="shipping" enabled={data.autoReply.shipping} pluginEnabled={config.enabled} onChange={(enabled) => updateBusiness((p) => ({ ...p, autoReply: { ...p.autoReply, shipping: enabled } }))} />
+      <CategorySwitch category="shipping" active={data.autoReply.shipping} pluginEnabled={config.active} onChange={(active) => updateBusiness((p) => ({ ...p, autoReply: { ...p.autoReply, shipping: active } }))} />
       <section className="opts-section"><h2>物流回复关键词</h2>{renderKeywords('shipping', data.shippingKeywords)}</section>
       <section className="opts-section"><h2>物流信息</h2>
         <div className="opts-row"><label>回复内容语言</label>{languageSelect(data.shippingLanguage, (value) => updateBusiness((p) => ({ ...p, shippingLanguage: value })))}</div>
@@ -235,22 +236,22 @@ export function OptionsApp() {
     </>}
 
     {activeTab === 'trust' && <>
-      <CategorySwitch category="trust" enabled={data.autoReply.trust} pluginEnabled={config.enabled} onChange={(enabled) => updateBusiness((p) => ({ ...p, autoReply: { ...p.autoReply, trust: enabled } }))} />
+      <CategorySwitch category="trust" active={data.autoReply.trust} pluginEnabled={config.active} onChange={(active) => updateBusiness((p) => ({ ...p, autoReply: { ...p.autoReply, trust: active } }))} />
       <section className="opts-section"><h2>信任与保障关键词</h2>{renderKeywords('trust', data.trustKeywords)}</section>
       <section className="opts-section"><h2>回复内容</h2><div className="opts-row"><label>回复内容语言</label>{languageSelect(data.trustLanguage, (value) => updateBusiness((p) => ({ ...p, trustLanguage: value })))}</div><div className="opts-row"><label htmlFor="trust-text">付款与发货说明</label><textarea id="trust-text" value={data.trustText} onChange={(e) => updateBusiness((p) => ({ ...p, trustText: e.target.value }))} /></div><div className="opts-row"><label htmlFor="group-url">客户体验群邀请链接（可选）</label><input id="group-url" type="text" value={data.customerGroupUrl} onChange={(e) => updateBusiness((p) => ({ ...p, customerGroupUrl: e.target.value }))} placeholder="https://chat.whatsapp.com/..." /></div><ToggleSwitch id="include-group" label="在回复中附带客户群邀请" checked={data.includeGroupInvite} onChange={(includeGroupInvite) => updateBusiness((p) => ({ ...p, includeGroupInvite }))} /><div className="opts-help">邀请文案会提示群成员可能看到彼此号码和群内发言，链接单独放在最后一行。</div>{data.includeGroupInvite && !validGroupUrl(data.customerGroupUrl) && <p className="opts-warning">请填写有效的 WhatsApp 群邀请链接，否则不会发送这类回复。</p>}<ReplyPreview language={data.trustLanguage} text={data.trustText} suffix={data.includeGroupInvite && validGroupUrl(data.customerGroupUrl) ? groupInvitationText(data.trustLanguage, data.customerGroupUrl) : ''} /></section>
     </>}
 
     {activeTab === 'phrase' && <section className="opts-section opts-section-first">
-      <div className="opts-heading"><div><h2>常用语</h2><p className="opts-help">每条常用语独立启用，命中关键词后自动回复。多条命中时按列表顺序合并发送；禁用项不参与匹配。</p></div><button type="button" className="opts-primary" disabled={Boolean(editingPhrase)} onClick={() => setEditingPhrase({ id: crypto.randomUUID(), title: '', content: '', language: 'zh-CN', enabled: true, keywords: [], updatedAt: Date.now() })}>添加常用语</button></div>
+      <div className="opts-heading"><div><h2>常用语</h2><p className="opts-help">每条常用语独立启用，命中关键词后自动回复。多条命中时按列表顺序合并发送；禁用项不参与匹配。</p></div><button type="button" className="opts-primary" disabled={Boolean(editingPhrase)} onClick={() => setEditingPhrase({ id: crypto.randomUUID(), title: '', content: '', language: 'zh-CN', active: true, keywords: [], updatedAt: Date.now() })}>添加常用语</button></div>
       {editingPhrase ? <PhraseEditor key={editingPhrase.id} phrase={editingPhrase} onChange={setEditingPhrase} onCancel={() => setEditingPhrase(null)} onSave={async (phrase) => {
         const saved = await updateBusiness((prev) => ({ ...prev, phrases: prev.phrases.some((item) => item.id === phrase.id) ? prev.phrases.map((item) => item.id === phrase.id ? phrase : item) : [...prev.phrases, phrase] }));
         if (saved) setEditingPhrase(null);
       }} /> : <div className="opts-phrase-list">
         {data.phrases.map((phrase) => <div className="opts-phrase-row" key={phrase.id}>
-          <div className="opts-product-main"><strong>{phrase.title}</strong><span className="opts-phrase-content">{phrase.content}</span><small>{phrase.language === 'zh-CN' ? '中文 → 西语' : '西语原文'} · {phrase.keywords.filter((keyword) => keyword.enabled).length} 个启用关键词</small></div>
-          <div className="opts-phrase-actions"><ToggleSwitch compact label={`启用${phrase.title}`} checked={phrase.enabled}
-            description={!phrase.enabled ? '命中关键词也不会回复' : !phrase.keywords.some((keyword) => keyword.enabled && keyword.text.trim()) ? '请启用触发关键词' : config.enabled ? '命中关键词后自动发送' : '等待启用翻译插件'}
-            onChange={(enabled) => { void updateBusiness((prev) => ({ ...prev, phrases: prev.phrases.map((item) => item.id === phrase.id ? { ...item, enabled, updatedAt: Date.now() } : item) })); }} />
+          <div className="opts-product-main"><strong>{phrase.title}</strong><span className="opts-phrase-content">{phrase.content}</span><small>{phrase.language === 'zh-CN' ? '中文 → 西语' : '西语原文'} · {phrase.keywords.filter((keyword) => keyword.active).length} 个启用关键词</small></div>
+          <div className="opts-phrase-actions"><ToggleSwitch compact label={`启用${phrase.title}`} checked={phrase.active}
+            description={!phrase.active ? '命中关键词也不会回复' : !phrase.keywords.some((keyword) => keyword.active && keyword.text.trim()) ? '请启用触发关键词' : config.active ? '命中关键词后自动发送' : '等待启用翻译插件'}
+            onChange={(active) => { void updateBusiness((prev) => ({ ...prev, phrases: prev.phrases.map((item) => item.id === phrase.id ? { ...item, active, updatedAt: Date.now() } : item) })); }} />
             <button type="button" className="opts-secondary" onClick={() => setEditingPhrase(phrase)}>编辑</button><button type="button" className="opts-danger-link" onClick={() => { if (window.confirm(`确定删除常用语“${phrase.title}”吗？`)) void updateBusiness((prev) => ({ ...prev, phrases: prev.phrases.filter((item) => item.id !== phrase.id) })); }}>删除</button></div>
         </div>)}
         {data.phrases.length === 0 && <div className="opts-empty">还没有常用语，点击“添加常用语”创建第一条。</div>}
@@ -260,20 +261,20 @@ export function OptionsApp() {
   </div>;
 }
 
-function AutoReplyToggle({ id, label, enabled, disabled = false, description, onChange }: {
-  id: string; label: string; enabled: boolean; disabled?: boolean; description: string; onChange: (value: boolean) => void;
+function AutoReplyToggle({ id, label, active, disabled = false, description, onChange }: {
+  id: string; label: string; active: boolean; disabled?: boolean; description: string; onChange: (value: boolean) => void;
 }) {
-  return <ToggleSwitch id={id} label={label} checked={enabled} disabled={disabled} description={description} onChange={onChange} />;
+  return <ToggleSwitch id={id} label={label} checked={active} disabled={disabled} description={description} onChange={onChange} />;
 }
 
-function CategorySwitch({ category, enabled, pluginEnabled, onChange }: {
-  category: BuiltinReplyCategory; enabled: boolean; pluginEnabled: boolean; onChange: (value: boolean) => void;
+function CategorySwitch({ category, active, pluginEnabled, onChange }: {
+  category: BuiltinReplyCategory; active: boolean; pluginEnabled: boolean; onChange: (value: boolean) => void;
 }) {
-  const live = enabled && pluginEnabled;
-  const description = !enabled ? '命中关键词后生成草稿，由你手动发送' : live ? '命中关键词后自动填入并发送，无需逐条点击' : '已选择自动发送，等待启用翻译插件';
+  const live = active && pluginEnabled;
+  const description = !active ? '命中关键词后生成草稿，由你手动发送' : live ? '命中关键词后自动填入并发送，无需逐条点击' : '已选择自动发送，等待启用翻译插件';
   return <section className="opts-section opts-section-first"><h2>{CATEGORY_NAMES[category]}自动回复</h2>
-    <AutoReplyToggle id={`${category}-auto`} label={`${CATEGORY_NAMES[category]}自动回复`} enabled={enabled} description={description} onChange={onChange} />
-    <p id={`${category}-auto-help`} className="opts-help">{live ? '已生效，客户询问后自动发送回复。' : enabled ? '请先在“设置”中启用翻译插件。' : '开启本类别开关即可自动回复。'}</p>
+    <AutoReplyToggle id={`${category}-auto`} label={`${CATEGORY_NAMES[category]}自动回复`} active={active} description={description} onChange={onChange} />
+    <p id={`${category}-auto-help`} className="opts-help">{live ? '已生效，客户询问后自动发送回复。' : active ? '请先在“设置”中启用翻译插件。' : '开启本类别开关即可自动回复。'}</p>
   </section>;
 }
 
@@ -298,13 +299,13 @@ function PhraseEditor({ phrase, onChange, onCancel, onSave }: {
     <p className="opts-help">标题仅用于管理，发送时只使用回复内容。关键词可匹配客户原文或中文译文；“你好”也能匹配 Hola、您好、嗨等常见问候。</p>
     <div className="opts-row"><label>触发关键词 *</label><div className="opts-keywords">
       {phrase.keywords.map((keyword) => <div className="opts-phrase-keyword" key={keyword.id}>
-        <ToggleSwitch compact label={`启用关键词${keyword.text}`} checked={keyword.enabled} onChange={(enabled) => update({ keywords: phrase.keywords.map((item) => item.id === keyword.id ? { ...item, enabled } : item) })} />
+        <ToggleSwitch compact label={`启用关键词${keyword.text}`} checked={keyword.active} onChange={(active) => update({ keywords: phrase.keywords.map((item) => item.id === keyword.id ? { ...item, active } : item) })} />
         <input aria-label={`修改关键词${keyword.text}`} value={keyword.text} onChange={(event) => update({ keywords: phrase.keywords.map((item) => item.id === keyword.id ? { ...item, text: event.target.value } : item) })} />
         <button type="button" aria-label={`删除关键词${keyword.text}`} onClick={() => update({ keywords: phrase.keywords.filter((item) => item.id !== keyword.id) })}>删除</button>
       </div>)}
       <div className="opts-keyword-add"><input aria-label="新常用语关键词" value={keywordText} onChange={(event) => setKeywordText(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) { event.preventDefault(); addKeyword(); } }} placeholder="输入关键词，按回车添加" /><button type="button" onClick={addKeyword}>添加关键词</button></div>
     </div></div>
-    <ToggleSwitch label="启用此常用语" checked={phrase.enabled} description={phrase.enabled ? '命中启用的关键词后自动回复' : '已停用，命中关键词也不会回复'} onChange={(enabled) => update({ enabled })} />
+    <ToggleSwitch label="启用此常用语" checked={phrase.active} description={phrase.active ? '命中启用的关键词后自动回复' : '已停用，命中关键词也不会回复'} onChange={(active) => update({ active })} />
     {error && <p className="opts-warning" role="alert">{error}</p>}
     <div className="opts-form-actions"><button type="button" className="opts-secondary" disabled={saving} onClick={onCancel}>取消</button><button type="button" className="opts-primary" disabled={saving} onClick={async () => {
       if (!phrase.title.trim() || !phrase.content.trim()) { setError('请填写标题和回复内容'); return; }
@@ -350,7 +351,7 @@ function ReplyPreview({ language, text, suffix = '' }: { language: ReplyLanguage
 }
 
 function PaymentEditor({ method, onChange, onDelete }: { method: PaymentMethod; onChange: (patch: Partial<PaymentMethod>) => void; onDelete: () => void }) {
-  return <div className="opts-payment-card"><div className="opts-payment-head"><input value={method.name} onChange={(e) => onChange({ name: e.target.value })} placeholder="方式名称，例如银行转账" /><label><input type="radio" checked={method.isDefault} onChange={() => onChange({ isDefault: true })} /> 默认</label><ToggleSwitch compact label={`启用${method.name || '支付方式'}`} checked={method.enabled} onChange={(enabled) => onChange({ enabled })} /><button className="opts-danger-link" onClick={onDelete}>删除</button></div><ClipboardTextField multiline label={`${method.name || '支付方式'}收款说明`} value={method.content} onChange={(content) => onChange({ content })} placeholder="按上方所选语言填写收款说明；留空时不会参与回复" /></div>;
+  return <div className="opts-payment-card"><div className="opts-payment-head"><input value={method.name} onChange={(e) => onChange({ name: e.target.value })} placeholder="方式名称，例如银行转账" /><label><input type="radio" checked={method.isDefault} onChange={() => onChange({ isDefault: true })} /> 默认</label><ToggleSwitch compact label={`启用${method.name || '支付方式'}`} checked={method.active} onChange={(active) => onChange({ active })} /><button className="opts-danger-link" onClick={onDelete}>删除</button></div><ClipboardTextField multiline label={`${method.name || '支付方式'}收款说明`} value={method.content} onChange={(content) => onChange({ content })} placeholder="按上方所选语言填写收款说明；留空时不会参与回复" /></div>;
 }
 
 function ProductEditor({ product, imageLimitBytes, onChange, onCancel, onSave, renderKeywords, suggestions, selectedSuggestions, onSuggestionChange, onGenerate, onApplySuggestions, generating }: {
@@ -395,7 +396,7 @@ function ProductEditor({ product, imageLimitBytes, onChange, onCancel, onSave, r
     <p className="opts-help">纯数字价格附所选币种；英文／西语报价说明保留原文和换行，不额外添加币种。开启商品自动发送后，询价也会自动回复。</p>
     <div className="opts-row"><label>中文触发关键词</label>{renderKeywords('product', product.keywords)}<button type="button" className="opts-secondary" disabled={generating} onClick={onGenerate}>{generating ? '正在生成…' : '根据商品资料生成建议'}</button><p className="opts-help">会将商品名称、型号和介绍发送给当前配置的 AI 服务；确认并保存商品后关键词才生效。</p></div>
     {suggestions.length > 0 && <div className="opts-suggestions"><strong>确认要启用的建议</strong>{suggestions.map((word) => <label key={word}><input type="checkbox" checked={selectedSuggestions.includes(word)} onChange={(e) => onSuggestionChange(e.target.checked ? [...selectedSuggestions, word] : selectedSuggestions.filter((v) => v !== word))} />{word}</label>)}<button type="button" onClick={onApplySuggestions}>加入已启用关键词</button></div>}
-    <ToggleSwitch label="启用此商品" checked={product.enabled} onChange={(enabled) => update({ enabled })} />
+    <ToggleSwitch label="启用此商品" checked={product.active} onChange={(active) => update({ active })} />
     <div className="opts-form-actions"><button className="opts-secondary" onClick={onCancel}>取消</button><button className="opts-primary" disabled={readingImages || saving} onClick={async () => { if (!product.name.trim()) { window.alert('请填写商品名称。'); return; } if (!product.price.trim()) { window.alert('请填写价格或报价说明。'); return; } setSaving(true); try { await onSave({ ...product, name: product.name.trim(), updatedAt: Date.now() }); } finally { if (mounted.current) setSaving(false); } }}>{readingImages ? '正在读取图片…' : saving ? '正在保存…' : '保存商品'}</button></div>
   </div>;
 }

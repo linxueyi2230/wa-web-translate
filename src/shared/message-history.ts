@@ -27,6 +27,7 @@ export interface TranslationRecord {
   messageId: string;
   text: string;
   translated: string;
+  sourceLanguage?: string | null;
   target: string;
   context: string;
   createdAt: number;

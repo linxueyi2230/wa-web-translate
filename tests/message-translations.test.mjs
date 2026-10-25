@@ -188,6 +188,8 @@ test('incoming annotations persist across page reload; original message text is 
   instance.scan();
   await until(() => first.node.querySelector('.wa-translate-message-body')?.textContent === '你好');
   assert.equal(first.body.textContent, 'Hello');
+  const cached = Object.values(storage.records).find((row) => row.messageId === 'false_123@c.us_A');
+  assert.equal(cached.sourceLanguage, 'en');
   assert.equal(first.node.querySelectorAll('[data-wa-trans-local]').length, 1);
   await wait(250); // Our own DOM mutations must not cause more translations.
   assert.equal(calls, 1);
@@ -195,6 +197,20 @@ test('incoming annotations persist across page reload; original message text is 
   const next = engine(t, async () => { assert.fail('cached history must not call the provider'); }, storage).instance;
   next.scan();
   await until(() => first.node.querySelector('.wa-translate-message-body')?.textContent === '你好');
+});
+
+test('unrecognized source language stays null and old cached history is never inferred from preferences', async (t) => {
+  dom(t);
+  const { instance, storage } = engine(t, async () => ({ translated: '未知语言', source: 'unknown', target: 'zh-CN' }));
+  const first = bubble('false_123@c.us_UNKNOWN', 'undetected');
+  instance.scan();
+  await until(() => first.node.querySelector('.wa-translate-message-body')?.textContent === '未知语言');
+  const record = Object.values(storage.records).find((row) => row.messageId === 'false_123@c.us_UNKNOWN');
+  assert.equal(record.sourceLanguage, null);
+  const old = { messageId: 'old', text: 'legacy', translated: '旧消息', target: 'zh-CN', context: translationContext(config), createdAt: 1 };
+  const repository = new HistoryStorage(storage);
+  await repository.saveTranslation(old);
+  assert.equal((await repository.translation('old', 'legacy', old.context)).sourceLanguage, undefined);
 });
 
 test('sent bubbles recover EXACT input, not a reverse translation, including repeated texts', async (t) => {
@@ -452,7 +468,7 @@ test('changing native language invalidates translations; disabling removes local
   instance.scan();
   await until(() => message.node.querySelector('.wa-translate-message-body')?.textContent === '日本語');
   assert.equal(calls, 2);
-  instance.setConfig({ ...config, enabled: false });
+  instance.setConfig({ ...config, active: false });
   assert.equal(message.node.querySelector('[data-wa-trans-local]'), null);
   assert.equal(message.body.textContent, 'Hello');
 });

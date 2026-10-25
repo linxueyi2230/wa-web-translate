@@ -72,9 +72,9 @@ export function installBusinessMediaSendHook(): boolean {
               // Only nonempty Chinese captions need translation; uncaptioned
               // photos retain the same batch owner until the whole group finishes.
               if (owner.language === 'zh-CN' && typeof caption === 'string' && caption.trim() && !isAutomaticBusinessReply(owner.chatId, caption)) {
-                if (!getConfig().enabled) throw new Error('翻译已关闭，请启用翻译后再发送中文草稿');
+                if (!getConfig().active) throw new Error('翻译已关闭，请启用翻译后再发送中文草稿');
                 draft = await prepareTranslatedOutgoing(caption, owner.chatId, 'zh-CN', 'es', preparedNativeTranslation(owner.chatId, owner.messageId, caption));
-                if (!getConfig().enabled) throw new Error('翻译已关闭，已停止图片说明发送');
+                if (!getConfig().active) throw new Error('翻译已关闭，已停止图片说明发送');
                 const nextOptions = { ...options, caption: draft.translated };
                 if (packed) next[0] = { ...sendArgs[0], options: nextOptions };
                 else next[1] = nextOptions;

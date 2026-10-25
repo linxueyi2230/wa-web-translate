@@ -317,7 +317,7 @@ export class BusinessReplies {
 
   private drain(): void {
     this.downgradeQueued();
-    if (this.pageGone || !this.config?.enabled || !this.data || !this.capabilityReady || !this.recordsLoaded) return;
+    if (this.pageGone || !this.config?.active || !this.data || !this.capabilityReady || !this.recordsLoaded) return;
     void this.pumpAuto();
     for (const record of this.records.values()) {
       if (record.status === 'sending' && record.message.id !== this.autoMessageId && Date.now() - record.updatedAt > 120_000) {
@@ -337,11 +337,11 @@ export class BusinessReplies {
     if (!this.data || !this.config || this.pageGone) return;
     for (const record of this.records.values()) {
       if (record.status !== 'queued' || record.message.id === this.autoMessageId || this.downgrading.has(record.message.id)) continue;
-      const enabled = this.config.enabled && automaticCategoriesEnabled(this.data, record.categories, record.phraseIds);
-      if (enabled && record.settingsSignature === businessSettingsSignature(this.data) && record.translationContext === translationContext(this.config)) continue;
+      const active = this.config.active && automaticCategoriesEnabled(this.data, record.categories, record.phraseIds);
+      if (active && record.settingsSignature === businessSettingsSignature(this.data) && record.translationContext === translationContext(this.config)) continue;
       this.downgrading.add(record.message.id);
       void this.runtime<BusinessRuntimeRecord>('UPDATE', { messageId: record.message.id, owner: record.owner, expectedStatus: 'queued',
-        patch: { status: 'ready', manualOnly: true, error: enabled ? '配置已变化，请检查或重新生成草稿' : '自动回复已关闭，本条请人工确认' } })
+        patch: { status: 'ready', manualOnly: true, error: active ? '配置已变化，请检查或重新生成草稿' : '自动回复已关闭，本条请人工确认' } })
         .then((next) => this.rememberRecord(next)).catch(() => {}).finally(() => { this.downgrading.delete(record.message.id); this.render(); });
     }
   }
@@ -368,7 +368,7 @@ export class BusinessReplies {
         return;
       }
       const automaticCandidate = plan.autoAllowed && !record.manualOnly && !selectedProductId && generation === this.generation
-        && this.config.enabled;
+        && this.config.active;
       // Every manual Chinese reply is reviewed in Chinese before translation.
       // For a mixed-language plan, show the complete draft in Chinese so the
       // seller can review it; only already-Spanish parts need back-translation.
@@ -377,7 +377,7 @@ export class BusinessReplies {
       const prepareManual = async () => manualReply ??= await this.prepareText(plan, manualLanguage);
       const reply = await prepareManual();
       const preparedReply = automaticCandidate ? await this.prepareText(plan, 'es-MX') : undefined;
-      const automatic = automaticCandidate && generation === this.generation && this.config.enabled;
+      const automatic = automaticCandidate && generation === this.generation && this.config.active;
       if (!reply.trim()) throw new Error('回复内容为空');
       record = await this.update(record, { ...patch, reply, preparedReply, draftLanguage: manualLanguage, status: automatic ? 'queued' : 'ready', error: '', manualOnly: record.manualOnly || Boolean(selectedProductId) });
     } catch (error) {
@@ -389,7 +389,7 @@ export class BusinessReplies {
 
   private syncAutoControl(): void {
     window.postMessage({ [TAG]: true, kind: 'AUTO_CONTROL', control: {
-      enabled: Boolean(this.config?.enabled && (this.data && hasAutomaticReplies(this.data)) && !this.pageGone),
+      active: Boolean(this.config?.active && (this.data && hasAutomaticReplies(this.data)) && !this.pageGone),
       epoch: this.generation, token: this.autoLease?.token ?? '', expiresAt: this.autoLease?.expiresAt ?? 0,
       editorBusy: Boolean(this.editorSession?.open || this.editorSession?.busy || this.manualSending.size),
     } }, '*');
@@ -399,11 +399,11 @@ export class BusinessReplies {
     const pending = [...this.records.values()].filter((record) => ['pending', 'processing', 'queued', 'sending'].includes(record.status)).length;
     const manual = [...this.records.values()].filter((record) => record.status === 'ready').length;
     const status: BusinessAutoStatus = { ...this.autoState, owner: this.owner, pending, manual, updatedAt: Date.now() };
-    if (!hasAutomaticReplies(this.data) || !this.config.enabled) { status.phase = 'paused'; status.reason = '未启用自动回复，请开启对应分类或常用语'; }
+    if (!hasAutomaticReplies(this.data) || !this.config.active) { status.phase = 'paused'; status.reason = '未启用自动回复，请开启对应分类或常用语'; }
     else if (status.phase === 'idle' && pending) { status.phase = 'waiting'; status.reason = '正在按到达顺序准备回复'; }
     const issue = [...this.records.values()].filter((record) => record.status === 'ready' && record.error)
       .sort((a, b) => b.updatedAt - a.updatedAt)[0];
-    if (issue && hasAutomaticReplies(this.data) && this.config.enabled) status.reason = [status.reason, `待人工检查：${issue.error}`].filter(Boolean).join('；');
+    if (issue && hasAutomaticReplies(this.data) && this.config.active) status.reason = [status.reason, `待人工检查：${issue.error}`].filter(Boolean).join('；');
     // Runtime diagnostics stay in storage. Automatic customer service does not
     // add a queue counter, pause button or status panel to the chat window.
     if (Date.now() - this.lastStatusAt >= 1000) {
@@ -413,7 +413,7 @@ export class BusinessReplies {
   }
   private async pumpAuto(): Promise<void> {
     if (this.autoBusy || this.pageGone || !this.adapterStateReady || !(this.data && hasAutomaticReplies(this.data))
-      || !this.config?.enabled || this.autoState.phase !== 'idle' || this.editorSession?.open || this.editorSession?.busy || this.manualSending.size) return;
+      || !this.config?.active || this.autoState.phase !== 'idle' || this.editorSession?.open || this.editorSession?.busy || this.manualSending.size) return;
     // Preparation may run concurrently, but the oldest incoming record must
     // finish preparation before a later one can take the native interface.
     const next = [...this.records.values()].filter((record) => ['pending', 'processing', 'queued', 'sending'].includes(record.status))

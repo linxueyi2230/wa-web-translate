@@ -1,3 +1,4 @@
+import { migrateActiveFields } from "./active-migration";
 import { DEFAULT_BUSINESS_DATA, DEFAULT_CONFIG, type BusinessData, type Config } from './types';
 import { LEGACY_DEFAULT_TRANSLATION_STYLE } from './translation-policy';
 
@@ -6,12 +7,14 @@ const KEY_BUSINESS = 'businessData:v1';
 
 export async function loadConfig(): Promise<Config> {
   const got = await chrome.storage.local.get(KEY_CONFIG);
-  const stored = (got[KEY_CONFIG] ?? {}) as Partial<Config>;
+  const stored = migrateActiveFields((got[KEY_CONFIG] ?? {}) as Partial<Config>);
+  const backend = migrateActiveFields(await chrome.storage.local.get('haomai:backend'));
   return {
     ...DEFAULT_CONFIG,
     ...stored,
     personality: stored.personality === LEGACY_DEFAULT_TRANSLATION_STYLE ? DEFAULT_CONFIG.personality : stored.personality ?? DEFAULT_CONFIG.personality,
     translationPrompt: typeof stored.translationPrompt === 'string' ? stored.translationPrompt : DEFAULT_CONFIG.translationPrompt,
+    ...(backend['haomai:backend']?.active === true ? { active: false } : {}),
     apiKeys: { ...DEFAULT_CONFIG.apiKeys, ...(stored.apiKeys ?? {}) },
     model: { ...DEFAULT_CONFIG.model, ...(stored.model ?? {}) },
   };
@@ -21,7 +24,7 @@ let configSaveQueue: Promise<unknown> = Promise.resolve();
 export function saveConfig(patch: Partial<Config>): Promise<Config> {
   const operation = configSaveQueue.then(async () => {
     const current = await loadConfig();
-    const next = { ...current, ...patch };
+    const next = { ...current, ...migrateActiveFields(patch) };
     await chrome.storage.local.set({ [KEY_CONFIG]: next });
     return next;
   });
@@ -31,7 +34,7 @@ export function saveConfig(patch: Partial<Config>): Promise<Config> {
 
 export async function loadBusinessData(): Promise<BusinessData> {
   const got = await chrome.storage.local.get(KEY_BUSINESS);
-  const { globalAutoReply: _global, riskConfirmed: _risk, ...stored } = (got[KEY_BUSINESS] ?? {}) as
+  const { globalAutoReply: _global, riskConfirmed: _risk, ...stored } = migrateActiveFields(got[KEY_BUSINESS] ?? {}) as
     Partial<BusinessData> & { globalAutoReply?: unknown; riskConfirmed?: unknown };
   return {
     ...DEFAULT_BUSINESS_DATA,
@@ -51,7 +54,7 @@ export async function loadBusinessData(): Promise<BusinessData> {
 }
 
 export async function saveBusinessData(next: BusinessData): Promise<void> {
-  await chrome.storage.local.set({ [KEY_BUSINESS]: next });
+  await chrome.storage.local.set({ [KEY_BUSINESS]: migrateActiveFields(next) });
 }
 
 export function watchBusinessData(cb: (data: BusinessData) => void): () => void {
@@ -64,7 +67,7 @@ export function watchBusinessData(cb: (data: BusinessData) => void): () => void 
 
 export function watchConfig(cb: (cfg: Config) => void): () => void {
   const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
-    if (area !== 'local' || !changes[KEY_CONFIG]) return;
+    if (area !== 'local' || (!changes[KEY_CONFIG] && !changes['haomai:backend'])) return;
     loadConfig().then(cb);
   };
   chrome.storage.onChanged.addListener(listener);

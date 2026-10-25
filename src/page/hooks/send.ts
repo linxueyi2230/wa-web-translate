@@ -148,7 +148,7 @@ async function maybeRewrite(args: any[], c: Candidate): Promise<{ args: any[]; d
   console.info('[wa-translate][send] hook invoked', {
     function: c.function,
     argCount: args.length,
-    enabled: config.enabled,
+    active: config.active,
   });
   const body = args[c.bodyArgIndex];
   if (typeof body !== 'string' || !body.trim()) {
@@ -165,7 +165,7 @@ async function maybeRewrite(args: any[], c: Candidate): Promise<{ args: any[]; d
     return { args }; // Already prepared in Spanish, including edits in the native composer.
   }
 
-  if (!config.enabled) {
+  if (!config.active) {
     if (draftLanguage === 'zh-CN') throw new Error('翻译已关闭，请启用翻译后再发送中文草稿');
     console.info('[wa-translate][send] skipped: translation disabled');
     return { args };

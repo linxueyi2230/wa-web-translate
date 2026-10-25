@@ -3,7 +3,7 @@ import { normalizeChatId } from '@/shared/message-history';
 import { getActiveChatId, getActiveChatIdFromDom, openNativeChat } from './wa';
 import { armNativeBusinessSend, clearNativeBusinessSend, isBusinessDraftFinished, registerNativeBusinessSend, notifyBusinessDraftSendFailed } from './business-drafts';
 
-interface Control { enabled: boolean; epoch: number; token: string; expiresAt: number; editorBusy: boolean }
+interface Control { active: boolean; epoch: number; token: string; expiresAt: number; editorBusy: boolean }
 interface Callbacks {
   busy: (owned?: NativeAutoRequest) => string;
   insert: (request: NativeAutoRequest, validate: () => void) => Promise<void>;
@@ -29,7 +29,7 @@ export class NativeReplyError extends Error {
 }
 
 export class NativeAutoReply {
-  private control: Control = { enabled: false, epoch: 0, token: '', expiresAt: 0, editorBusy: false };
+  private control: Control = { active: false, epoch: 0, token: '', expiresAt: 0, editorBusy: false };
   private lastActivity = Date.now();
   private lastScrollIntent = 0;
   private composing = false;
@@ -59,7 +59,7 @@ export class NativeAutoReply {
   }
   sync(control: Control): void {
     this.control = control;
-    if (this.task && (!control.enabled || control.epoch !== this.task.epoch || control.token !== this.task.request.queueToken)) this.cancel('自动回复已暂停或配置已变化');
+    if (this.task && (!control.active || control.epoch !== this.task.epoch || control.token !== this.task.request.queueToken)) this.cancel('自动回复已暂停或配置已变化');
     this.report();
   }
   cancel(reason: string): void {
@@ -120,14 +120,14 @@ export class NativeAutoReply {
   }
   private report(): void {
     const task = this.task;
-    const reason = !this.control.enabled ? '自动回复已关闭，开启后才会继续'
+    const reason = !this.control.active ? '自动回复已关闭，开启后才会继续'
       : task?.cancelled || (task?.clicked ? '' : this.pauseReason(task?.inserted ? task.request : undefined));
-    this.callbacks.state({ phase: !this.control.enabled ? 'paused' : reason ? 'paused'
+    this.callbacks.state({ phase: !this.control.active ? 'paused' : reason ? 'paused'
       : task?.clicked ? 'sending' : task?.navigating ? 'switching' : task?.inserted ? 'composing' : 'idle',
     reason, customer: task ? this.callbacks.customer(task.request.chatId) : '' });
   }
   private valid(task: Task): boolean {
-    return !task.cancelled && this.control.enabled && this.control.epoch === task.epoch
+    return !task.cancelled && this.control.active && this.control.epoch === task.epoch
       && this.control.token === task.request.queueToken && this.control.expiresAt > Date.now();
   }
   private guard(task: Task, requireChat = true): void {

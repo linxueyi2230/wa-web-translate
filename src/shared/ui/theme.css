@@ -1,0 +1,10 @@
+/* Shared semantic resources are generated from haomai-go/shared/design-tokens.json. */
+:root { color-scheme:light; --bg:var(--haomai-background); --panel:var(--haomai-surface); --panel-2:var(--haomai-surface-muted); --border:var(--haomai-border); --text:var(--haomai-primary-text); --muted:var(--haomai-secondary-text); --accent:var(--haomai-accent); --danger:var(--haomai-danger); font-family:var(--haomai-font-family); }
+:root[data-theme="dark"] { color-scheme:dark; }
+.popup-shell .wa-setting-switch,.opts-shell .wa-setting-switch { color:var(--haomai-primary-text); background:var(--haomai-surface-muted); border-color:var(--haomai-border); }
+.popup-shell .wa-setting-switch[data-on="true"],.opts-shell .wa-setting-switch[data-on="true"] { border-color:var(--haomai-accent); background:var(--haomai-primary-surface); }
+.popup-shell .wa-setting-switch-state,.opts-shell .wa-setting-switch-state,.opts-shell .wa-setting-switch-description { color:var(--haomai-secondary-text); }
+.popup-shell .wa-setting-switch-track,.opts-shell .wa-setting-switch-track { background:var(--haomai-muted-text); }
+.popup-shell .wa-setting-switch[data-on="true"] .wa-setting-switch-track,.opts-shell .wa-setting-switch[data-on="true"] .wa-setting-switch-track { background:var(--haomai-accent); }
+/* Semantic aliases shared by the connected business workspace. */
+:root { --bg-page:var(--haomai-background); --bg-panel:var(--haomai-surface); --text-primary:var(--haomai-primary-text); --text-secondary:var(--haomai-secondary-text); --accent-soft:var(--haomai-primary-surface); --text-on-accent:#fff; }

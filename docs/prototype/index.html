@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+    <title>好麦 · Chrome 扩展界面设计</title>
+    <link rel="stylesheet" href="base.css">
+    <link rel="stylesheet" href="auth.css">
+    <link rel="stylesheet" href="style.css">
+    <script src="client.js" defer></script>
+    <script src="interactions.js" defer></script>
+    <script src="auth.js" defer></script>
+    <script src="theme.js" defer></script>
+    <script src="app.js" defer></script>
+</head>
+<body>
+    <div class="review-layout">
+        <aside class="review-sidebar">
+            <a class="brand" href="index.html"><span id="brand"></span><span class="brand-name">好麦</span></a>
+            <p class="sidebar-caption">聊出好生意</p>
+            <div class="review-label">CHROME / 原型预览导航</div>
+            <nav id="review-nav" aria-label="Chrome 页面"></nav>
+            <div class="review-footer"><span class="status"><i></i> 界面预览</span><p>工具栏弹窗 · 聊天侧栏 · 设置页</p><a href="../../README.md">查看扩展工程说明 →</a></div>
+        </aside>
+        <main class="review-main">
+            <header class="preview-heading">
+                <div><p class="eyebrow">HAOMAI / CHROME EXPERIENCE</p><h1 id="screen-name">WhatsApp 聊天</h1><p id="screen-caption"></p></div>
+                <div class="preview-tools"><select id="connection-state" aria-label="界面连接状态"><option value="ready">正常连接</option><option value="wa">WhatsApp 未登录</option><option value="offline">Chrome 离线</option></select><button class="button" id="theme-toggle" data-action="theme">深色模式</button></div>
+            </header>
+            <div class="browser" id="browser">
+                <div class="browser-tabs"><span class="browser-dots"><i></i><i></i><i></i></span><span class="browser-tab" id="tab-title">WhatsApp</span><span class="browser-plus">＋</span></div>
+                <div class="browser-toolbar"><span class="browser-arrows">← &nbsp; → &nbsp; ↻</span><div class="address-bar"><span class="lock-mark">♧</span><span id="address">web.whatsapp.com</span></div><button class="browser-extension" data-action="navigate" data-id="popup" aria-label="打开好麦扩展" title="好麦扩展"><span id="toolbar-mark"></span></button><span class="browser-user">林</span></div>
+                <div id="chrome" class="browser-content"></div>
+                <div id="layers"></div>
+                <div id="toast" role="status" aria-live="polite"></div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

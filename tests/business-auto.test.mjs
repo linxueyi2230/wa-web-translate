@@ -45,6 +45,7 @@ const storageListeners = [];
 let workerListener;
 const runtime = (request) => new Promise((resolve) => workerListener(request, { tab: { id: 1 } }, resolve));
 globalThis.chrome = {
+  alarms: { create() {}, onAlarm: { addListener() {} } },
   runtime: { onConnect: { addListener() {} }, onMessage: { addListener(fn) { workerListener = fn; } }, sendMessage: runtime },
   storage: { local: {
     async get(key) { return structuredClone(key === null ? records : { [key]: records[key] }); },
@@ -134,7 +135,7 @@ business.autoReply = { product: true, payment: true, shipping: true, trust: true
 business.productLanguage = business.shippingLanguage = business.trustLanguage = 'es-MX';
 business.shippingDays = '9–12 días'; business.shippingMethod = 'Envío desde China'; business.dispatchText = 'El mismo día; costo de envío: 20 MXN';
 business.trustText = 'Compra segura; verificamos el pago antes del envío.';
-business.products = [{ id: 'one', name: 'Modelo A', model: 'DN166', description: 'Edición conmemorativa', price: '250', currency: 'MXN', images: [], coverImageId: '', keywords: DEFAULT_PRODUCT_KEYWORDS.map((text) => ({ id: text, text, enabled: true, source: 'default' })), enabled: true, updatedAt: Date.now() }];
+business.products = [{ id: 'one', name: 'Modelo A', model: 'DN166', description: 'Edición conmemorativa', price: '250', currency: 'MXN', images: [], coverImageId: '', keywords: DEFAULT_PRODUCT_KEYWORDS.map((text) => ({ id: text, text, active: true, source: 'default' })), active: true, updatedAt: Date.now() }];
 records['businessData:v1'] = structuredClone(business);
 const translations = [];
 const controller = new BusinessReplies(async (request) => { translations.push(request.text); return { translated: request.target === 'es' ? `ES ${request.text}` : request.text, source: 'zh-CN', target: request.target }; });
@@ -331,17 +332,17 @@ test('a switch closed during insertion cancels the task before the native button
   active = chatA;
   let clicks = 0;
   const button = document.createElement('button'); button.addEventListener('click', () => clicks++);
-  const control = { enabled: true, epoch: 1, token: 'cancel-token', expiresAt: Date.now() + 60_000, editorBusy: false };
-  const native = new NativeAutoReply({ busy: () => '', insert: async () => native.sync({ ...control, enabled: false }),
+  const control = { active: true, epoch: 1, token: 'cancel-token', expiresAt: Date.now() + 60_000, editorBusy: false };
+  const native = new NativeAutoReply({ busy: () => '', insert: async () => native.sync({ ...control, active: false }),
     validateDraft() {}, isDraftInput: () => false, sendButton: () => button, authorize: async () => true, customer: () => 'test', state() {} });
   native.sync(control); offset += 6000;
   await assert.rejects(native.send({ id: 'cancel-action', messageId: 'false_111@c.us_CANCEL', chatId: chatA.id, text: 'reply', preparedReply: 'reply', draftLanguage: 'es-MX', images: [], queueToken: control.token }), /已暂停或配置已变化/);
   assert.equal(clicks, 0);
 });
 
-const commonPhrase = (id, content, enabled = true, words = ['欢迎']) => ({ id, title: `管理标题${id}`, content, enabled, language: 'es-MX', keywords: words.map((text) => ({ id: text, text, enabled: true, source: 'manual' })), updatedAt: Date.now() });
+const commonPhrase = (id, content, active = true, words = ['欢迎']) => ({ id, title: `管理标题${id}`, content, active, language: 'es-MX', keywords: words.map((text) => ({ id: text, text, active: true, source: 'manual' })), updatedAt: Date.now() });
 
-test('enabled common phrases automatically merge once per rule without any category switch', async () => {
+test('active common phrases automatically merge once per rule without any category switch', async () => {
   business.autoReply = { product: false, payment: false, shipping: false, trust: false };
   business.phrases = [commonPhrase('hello', 'Bienvenido', true, ['你好', '欢迎']), commonPhrase('help', '¿En qué puedo ayudarte?'), commonPhrase('off', 'NO ENVIAR', false)];
   await configure();
@@ -357,14 +358,14 @@ test('enabled common phrases automatically merge once per rule without any categ
   }
 });
 
-test('disabled common phrases never create a draft or replay an old incoming message when enabled later', async () => {
+test('disabled common phrases never create a draft or replay an old incoming message when active later', async () => {
   business.phrases = [commonPhrase('disabled', 'Ya estamos disponibles', false, ['有人吗'])];
   await configure(); active = chatA;
   const before = nativeClicks.length;
   const old = await incoming('有人吗', chatB);
   await until(() => old.record().status === 'no-match');
   assert.equal(old.record().reply, undefined);
-  business.phrases[0].enabled = true; await configure(); await wait(550);
+  business.phrases[0].active = true; await configure(); await wait(550);
   assert.equal(nativeClicks.length, before);
   assert.equal(old.record().status, 'no-match');
   const fresh = await incoming('有人吗', chatB);
@@ -373,7 +374,7 @@ test('disabled common phrases never create a draft or replay an old incoming mes
   assert.equal(nativeClicks.length, before + 1);
 });
 
-test('common phrases and enabled business categories share one automatic reply and one image batch', async () => {
+test('common phrases and active business categories share one automatic reply and one image batch', async () => {
   business.autoReply.product = true; business.autoReply.shipping = true;
   business.phrases = [commonPhrase('welcome', 'Gracias por contactarnos')];
   await configure();
@@ -435,16 +436,16 @@ test('Chinese greeting content still translates once and reuses the prepared rep
 });
 
 test('disabled greeting keyword and disabled phrase do not send Hola or replay it after enabling', async () => {
-  business.phrases[0].keywords[0].enabled = false;
+  business.phrases[0].keywords[0].active = false;
   await configure();
   const before = nativeClicks.length;
   const old = await incoming('Hola', chatB);
   await until(() => old.record().status === 'no-match');
-  business.phrases[0].keywords[0].enabled = true; business.phrases[0].enabled = false;
+  business.phrases[0].keywords[0].active = true; business.phrases[0].active = false;
   await configure();
   const disabled = await incoming('Hola', chatB);
   await until(() => disabled.record().status === 'no-match');
-  business.phrases[0].enabled = true; await configure(); await wait(550);
+  business.phrases[0].active = true; await configure(); await wait(550);
   assert.equal(old.record().status, 'no-match'); assert.equal(disabled.record().status, 'no-match');
   assert.equal(nativeClicks.length, before);
   const fresh = await incoming('Hola', chatB);

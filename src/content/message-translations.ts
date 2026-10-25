@@ -76,7 +76,7 @@ export class MessageTranslations {
   }
 
   setConfig(config: Config): void {
-    if (this.config && this.config.enabled === config.enabled
+    if (this.config && this.config.active === config.active
       && translationContext(this.config) === translationContext(config)) {
       this.config = config;
       return;
@@ -108,7 +108,7 @@ export class MessageTranslations {
   }
 
   scan(): void {
-    if (this.stopped || !this.config?.enabled || !this.config.nativeLang) return;
+    if (this.stopped || !this.config?.active || !this.config.nativeLang) return;
     const rows = messageRows();
     const messages: BubbleMessage[] = [];
     for (const bubble of rows) {
@@ -327,6 +327,7 @@ export class MessageTranslations {
     try {
       await this.storage.saveTranslation({
         messageId: message.id, text: message.text, translated: result.translated, target: config.nativeLang,
+        sourceLanguage: result.source && result.source !== 'unknown' ? result.source : null,
         context, createdAt: Date.now(),
       });
       persistent = true;

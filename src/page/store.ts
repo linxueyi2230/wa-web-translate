@@ -29,7 +29,7 @@ window.addEventListener('message', (e) => {
         provider: config.provider,
         nativeLang: config.nativeLang,
         targetLang: config.targetLang,
-        enabled: config.enabled,
+        active: config.active,
         hasApiKey: Boolean(config.apiKeys[config.provider]),
       });
       fire('config');

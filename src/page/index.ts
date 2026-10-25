@@ -1,3 +1,4 @@
+import { installHaomaiConnector } from './haomai-connector';
 // Main-world entry point. Loaded into web.whatsapp.com as a module via the content script.
 // Order matters: the WAM scrub must be installed before WhatsApp builds its event registry.
 
@@ -41,6 +42,7 @@ console.info('[wa-translate] page-world script booted');
   if (!scrubbed) scrubbed = installWamScrub();
   if (!scrubbed) console.warn('[wa-translate] wam scrub could not install (module not found)');
 
+  installHaomaiConnector();
   installSendHook();
   installBusinessAdapter();
   console.info('[wa-translate] ready');

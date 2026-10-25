@@ -11,7 +11,7 @@ export interface Config {
   model: Partial<Record<Provider, string>>;
   translationPrompt: string;
   personality: string;
-  enabled: boolean;
+  active: boolean;
 }
 
 export type BuiltinReplyCategory = 'product' | 'payment' | 'shipping' | 'trust';
@@ -21,7 +21,7 @@ export type ReplyLanguage = 'zh-CN' | 'es-MX';
 export interface ReplyKeyword {
   id: string;
   text: string;
-  enabled: boolean;
+  active: boolean;
   source: 'default' | 'manual' | 'ai';
 }
 
@@ -41,7 +41,7 @@ export interface Product {
   images: ProductImage[];
   coverImageId: string;
   keywords: ReplyKeyword[];
-  enabled: boolean;
+  active: boolean;
   updatedAt: number;
 }
 
@@ -50,7 +50,7 @@ export interface PaymentMethod {
   name: string;
   content: string;
   isDefault: boolean;
-  enabled: boolean;
+  active: boolean;
 }
 
 export interface CommonPhrase {
@@ -58,7 +58,7 @@ export interface CommonPhrase {
   title: string;
   content: string;
   language: ReplyLanguage;
-  enabled: boolean;
+  active: boolean;
   keywords: ReplyKeyword[];
   updatedAt: number;
 }
@@ -86,7 +86,7 @@ export interface BusinessData {
 }
 
 export function newKeyword(text: string, source: ReplyKeyword['source'] = 'manual'): ReplyKeyword {
-  return { id: crypto.randomUUID(), text: text.trim(), enabled: true, source };
+  return { id: crypto.randomUUID(), text: text.trim(), active: true, source };
 }
 
 export const DEFAULT_PRODUCT_KEYWORDS = ['商品信息', '产品信息', '全部信息', '商品详情', '产品详情', '图片', '型号', '多少钱', '价格', '价钱', '报价', '优惠', '折扣'];
@@ -97,18 +97,18 @@ export const DEFAULT_BUSINESS_DATA: BusinessData = {
   productLanguage: 'zh-CN',
   products: [],
   paymentLanguage: 'es-MX',
-  paymentKeywords: ['怎么付款', '怎么支付', '如何支付', '付款方式', '支付方式', '其他支付方式', '其他付款方式', '无法付款', '不方便付款', '不能转账', '没有银行账户', '不方便', '其他方式', '不能付款', '无法支付', 'OXXO', '银行转账'].map((text, index) => ({ id: `payment-${index}`, text, enabled: true, source: 'default' as const })),
+  paymentKeywords: ['怎么付款', '怎么支付', '如何支付', '付款方式', '支付方式', '其他支付方式', '其他付款方式', '无法付款', '不方便付款', '不能转账', '没有银行账户', '不方便', '其他方式', '不能付款', '无法支付', 'OXXO', '银行转账'].map((text, index) => ({ id: `payment-${index}`, text, active: true, source: 'default' as const })),
   paymentMethods: [
-    { id: 'bank-transfer', name: '银行转账', content: '', isDefault: true, enabled: true },
-    { id: 'oxxo', name: 'OXXO', content: '', isDefault: false, enabled: true },
+    { id: 'bank-transfer', name: '银行转账', content: '', isDefault: true, active: true },
+    { id: 'oxxo', name: 'OXXO', content: '', isDefault: false, active: true },
   ],
   shippingLanguage: 'zh-CN',
-  shippingKeywords: ['多久能收到', '几天到', '什么时候发货', '多久发货', '物流方式', '发货方式', '怎么发货'].map((text, index) => ({ id: `shipping-${index}`, text, enabled: true, source: 'default' as const })),
+  shippingKeywords: ['多久能收到', '几天到', '什么时候发货', '多久发货', '物流方式', '发货方式', '怎么发货'].map((text, index) => ({ id: `shipping-${index}`, text, active: true, source: 'default' as const })),
   shippingDays: '9–12 天',
   shippingMethod: '中国物流',
   dispatchText: '通常当天下午安排发货，如遇到中国的节假日发货可能顺延。',
   trustLanguage: 'zh-CN',
-  trustKeywords: ['交易安全吗', '可靠吗', '付款安全吗', '客户评价', '真实反馈'].map((text, index) => ({ id: `trust-${index}`, text, enabled: true, source: 'default' as const })),
+  trustKeywords: ['交易安全吗', '可靠吗', '付款安全吗', '客户评价', '真实反馈'].map((text, index) => ({ id: `trust-${index}`, text, active: true, source: 'default' as const })),
   trustText: '交易绝对安全真实可靠，您付款后，我将会和财务核实付款信息，收到付款后会安排发货。',
   customerGroupUrl: '',
   includeGroupInvite: false,
@@ -129,7 +129,7 @@ export const DEFAULT_CONFIG: Config = {
   },
   translationPrompt: DEFAULT_TRANSLATION_PROMPT,
   personality: DEFAULT_TRANSLATION_STYLE,
-  enabled: true,
+  active: true,
 };
 
 export interface TranslateRequest {

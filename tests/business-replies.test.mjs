@@ -11,8 +11,8 @@ const server = await createServer({ configFile: false,
 after(() => server.close());
 const { buildReplyPlan, businessSettingsSignature, formatReplyParts, productReplyImages, matchesKeyword, matchesKeywords, matchesPhraseKeywords, simpleGreetingChinese } = await server.ssrLoadModule('/src/shared/business-replies.ts');
 const { DEFAULT_BUSINESS_DATA, DEFAULT_CONFIG, DEFAULT_PRODUCT_KEYWORDS } = await server.ssrLoadModule('/src/shared/types.ts');
-const keyword = (text, enabled = true) => ({ id: text, text, enabled, source: 'manual' });
-const product = (id, text = '纪念版') => ({ id, name: `${id}纪念版`, model: 'DN166', description: '纪念版商品', price: '250', currency: 'MXN', images: [], coverImageId: '', keywords: [keyword(text), ...DEFAULT_PRODUCT_KEYWORDS.map((text) => keyword(text))], enabled: true, updatedAt: Date.now() });
+const keyword = (text, active = true) => ({ id: text, text, active, source: 'manual' });
+const product = (id, text = '纪念版') => ({ id, name: `${id}纪念版`, model: 'DN166', description: '纪念版商品', price: '250', currency: 'MXN', images: [], coverImageId: '', keywords: [keyword(text), ...DEFAULT_PRODUCT_KEYWORDS.map((text) => keyword(text))], active: true, updatedAt: Date.now() });
 function data() { return structuredClone(DEFAULT_BUSINESS_DATA); }
 
 test('Chinese keywords use phrases, Latin terms require whole words, disabled keywords do not match', () => {
@@ -77,6 +77,7 @@ test('each category switch is sufficient without a global or risk acknowledgemen
 const records = { config: { ...DEFAULT_CONFIG, nativeLang: 'zh-CN', targetLang: 'es' } };
 let listener;
 globalThis.chrome = {
+  alarms: { create() {}, onAlarm: { addListener() {} } },
   runtime: { onConnect: { addListener() {} }, onMessage: { addListener(fn) { listener = fn; } } },
   storage: { local: {
     async get(key) { return structuredClone(key === null ? records : { [key]: records[key] }); },
@@ -128,9 +129,9 @@ test('worker authorization allows quotes and combined replies but requires lease
     business.autoReply.shipping = false;
     assert.equal((await rpc('CAN_SEND', disabled)).result, false);
     business.autoReply.shipping = true;
-    records.config.enabled = false;
+    records.config.active = false;
     assert.equal((await rpc('CAN_SEND', disabled)).result, false);
-    records.config.enabled = true;
+    records.config.active = true;
   } finally { await rpc('QUEUE_RELEASE', { owner, token: lease.token }); }
 });
 
@@ -218,7 +219,7 @@ test('product image batches contain every saved photo with the cover first, exce
   }
 });
 
-const phrase = (id, content = `Contenido ${id}`, enabled = true, words = ['欢迎']) => ({ id, title: `常用语标题${id}`, content, enabled, language: 'es-MX', keywords: words.map((word) => keyword(word)), updatedAt: 1 });
+const phrase = (id, content = `Contenido ${id}`, active = true, words = ['欢迎']) => ({ id, title: `常用语标题${id}`, content, active, language: 'es-MX', keywords: words.map((word) => keyword(word)), updatedAt: 1 });
 
 test('a configured greeting matches Hola and translation variants without changing other keyword rules', () => {
   const business = data(); business.phrases = [phrase('hello', 'Bienvenido', true, ['你好'])];
@@ -234,9 +235,9 @@ test('a configured greeting matches Hola and translation variants without changi
   }
   assert.equal(matchesPhraseKeywords('Hola', [keyword('你好', false)]), false);
   assert.equal(matchesPhraseKeywords('Hola', [keyword('欢迎')]), false);
-  business.phrases[0].enabled = false;
+  business.phrases[0].active = false;
   assert.deepEqual(buildReplyPlan('Hola', business).categories, []);
-  business.phrases[0].enabled = true; business.phrases[0].keywords[0].enabled = false;
+  business.phrases[0].active = true; business.phrases[0].keywords[0].active = false;
   assert.deepEqual(buildReplyPlan('Hola', business).categories, []);
 });
 
@@ -253,7 +254,7 @@ test('only standalone greetings bypass incoming translation; combined questions 
   assert.equal(combined.parts.at(-1).text, 'Bienvenido');
 });
 
-test('common phrases start empty and each enabled entry can automatically reply with no category or global switch', () => {
+test('common phrases start empty and each active entry can automatically reply with no category or global switch', () => {
   const business = data();
   assert.deepEqual(business.phrases, []);
   assert.deepEqual(buildReplyPlan('欢迎', business).categories, []);
@@ -263,14 +264,14 @@ test('common phrases start empty and each enabled entry can automatically reply 
   assert.equal(plan.autoAllowed, true);
   assert.equal(plan.productPriceOnly, false);
   assert.equal(formatReplyParts(plan.parts, 'es-MX'), 'Hola');
-  business.phrases[0].enabled = false;
+  business.phrases[0].active = false;
   assert.deepEqual(buildReplyPlan('多少钱', business).categories, []);
 });
 
 test('multiple common phrases merge in list order, once per entry, excluding disabled rules and keywords', () => {
   const business = data();
   business.phrases = [phrase('one', 'Bienvenido', true, ['欢迎', '你好']), phrase('two', 'En qué puedo ayudarte'), phrase('off', 'NO ENVIAR', false), phrase('off-key', 'NO ENVIAR')];
-  business.phrases[3].keywords[0].enabled = false;
+  business.phrases[3].keywords[0].active = false;
   const plan = buildReplyPlan('你好，欢迎', business);
   assert.deepEqual(plan.phrases.map((item) => item.id), ['one', 'two']);
   assert.deepEqual(plan.parts.map((part) => part.text), ['Bienvenido', 'En qué puedo ayudarte']);

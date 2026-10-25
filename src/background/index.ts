@@ -1,3 +1,5 @@
+import { migrateActiveFields } from "../shared/active-migration";
+import './haomai';
 import { loadBusinessData, loadConfig } from '@/shared/storage';
 import type { TranslateRequest, TranslateResult } from '@/shared/types';
 import { buildPrompt, parseModelOutput } from './prompt';
@@ -67,6 +69,8 @@ async function translate(req: TranslateRequest, requestId?: string): Promise<Tra
     return { translated: '', source: 'unknown', target: req.target };
   }
   const config = await loadConfig();
+  const backendSettings = migrateActiveFields(await chrome.storage.local.get('haomai:backend'));
+  if (backendSettings['haomai:backend']?.active) throw new Error('后台模式由服务器统一处理翻译');
   console.info('[wa-translate][sw] config loaded', {
     requestId,
     provider: config.provider,
@@ -74,7 +78,7 @@ async function translate(req: TranslateRequest, requestId?: string): Promise<Tra
     nativeLang: config.nativeLang,
     targetLang: config.targetLang,
     hasApiKey: Boolean(config.apiKeys[config.provider]),
-    enabled: config.enabled,
+    active: config.active,
   });
   const prompt = buildPrompt(req, config);
   console.info('[wa-translate][sw] prompt built', {
@@ -226,7 +230,7 @@ async function handleBusinessRuntime(msg: any, sender: chrome.runtime.MessageSen
     if (record.owner !== msg.owner || record.status !== (finalCheck ? 'sending' : 'queued') || record.manualOnly
       || !record.reply?.trim() || !record.preparedReply?.trim() || (record.productIds?.length ?? 0) > 1) return false;
     const [business, config] = await Promise.all([loadBusinessData(), loadConfig()]);
-    if (!config.enabled || !automaticCategoriesEnabled(business, record.categories, record.phraseIds)) return false;
+    if (!config.active || !automaticCategoriesEnabled(business, record.categories, record.phraseIds)) return false;
     if (record.settingsSignature && record.settingsSignature !== businessSettingsSignature(business)) return false;
     if (record.translationContext !== translationContext(config)) return false;
     if (finalCheck) return Date.now() - record.updatedAt < 60_000;

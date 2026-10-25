@@ -220,7 +220,7 @@ AI 仅用于实际需要的消息/回复翻译与主动请求的商品关键词�
 
 ### 加载
 
-1. 执行 `pnpm build`，产物为 `dist/`。
+1. 执行 `yarn build`，产物为 `dist/`。
 2. Chrome 的扩展管理页面重新加载原来指向这个 `dist/` 的扩展；如浏览器提示新增剪贴板权限，允许后继续。重新打开配置页，再刷新 WhatsApp Web。保留同一安装以保留本地历史和设置。
 3. 从插件的“打开设置”进入六个 Tab，填写商品及支付正文。分类自动开关初始关闭，常用语列表初始为空。
 
@@ -264,7 +264,7 @@ AI 仅用于实际需要的消息/回复翻译与主动请求的商品关键词�
 - [ ] 商品自动回复发送 2 张及 6 张图片时，一次粘贴、一次点击，说明仅在第一张；最后一张仍在排队时不标记完成、不切换下一位客户。部分失败时不重发已发送图片。
 - [ ] 发送失败/状态不明不会重复自动发送，能够看到错误并转人工处理。
 
-自动化回归覆盖 `tests/business-replies.test.mjs`、`tests/business-auto.test.mjs`、`tests/business-options.test.mjs` 和现有翻译相关测试；真实客户发送与 AI Key 联调未由开发代理代做。本次 `pnpm build` 已通过 TypeScript 检查与生产打包；这不代替真实 WhatsApp 页面验收。
+自动化回归覆盖 `tests/business-replies.test.mjs`、`tests/business-auto.test.mjs`、`tests/business-options.test.mjs` 和现有翻译相关测试；真实客户发送与 AI Key 联调未由开发代理代做。既有生产构建已通过 TypeScript 检查与打包，当前构建命令为 `yarn build`；这不代替真实 WhatsApp 页面验收。
 
 ## 8. 接口兼容性
 

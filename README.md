@@ -1,4 +1,8 @@
-# WA Web Translate
+# 好麦 Chrome 扩展
+
+启动和发布请先看：[本地调试](docs/LOCAL_DEBUG.md) · [上线部署与商店发布](docs/DEPLOYMENT.md) · [少量同事试用打包](docs/packaging.md)。四仓库公共入口见[好麦工程指南](../haomai-go/docs/guides/README.md)。
+
+当前使用好麦后台业务模式：扩展连接 Go API，完成登录、来源账号关联、消息同步与工作台操作。API 地址由维护者在构建时统一设置，当前登录、注册、找回密码和设置页不提供服务器配置或独立模式切换入口。旧版直接连接 AI 供应商的代码与存储保留兼容；下面的旧版翻译说明用于理解历史功能与数据，不是当前工作台的操作步骤。
 
 A hilariously vibe-coded Chrome extension that adds **two-way AI translation** and **local foreign-trade reply assistance** to WhatsApp Web. Configure both participants' native languages once — outgoing messages are translated before they're sent, incoming messages are translated as they arrive. Originals remain visible locally for verification and are not included in outgoing messages.
 
@@ -16,9 +20,9 @@ A hilariously vibe-coded Chrome extension that adds **two-way AI translation** a
 - **Configurable AI**: DeepSeek, Anthropic Claude, OpenAI GPT, or Google Gemini. Bring your own API key.
 - **Configurable translation context**: Options → 设置 → 翻译场景与提示词 includes an editable foreign-trade scene for Chinese sellers and Mexican customers, plus the existing style guidance. The scene applies to the selected target language, including Mexican Spanish or business English. Save scene edits explicitly to apply them; typing does not request translations. Existing installations inherit the default scene without replacing their style guidance or language settings.
 
-All keys live in `chrome.storage.local`. Nothing is sent anywhere except the AI provider you've chosen.
+独立模式的供应商 API Key 保存在 `chrome.storage.local`，翻译直接请求所选供应商。好麦后台模式将账号、消息及业务操作提交已配置的 Go API，媒体通过服务端授权上传 OSS，AI 凭据留在服务端；登录令牌持久保存在扩展 Origin 的 IndexedDB，仅在可信扩展上下文缓存于 `chrome.storage.session`。
 
-## 外贸回复首版
+## 旧版外贸回复功能（兼容说明）
 
 设置页采用六个顶部标签：设置、商品、支付方式、物流、信任与保障、常用语。设置页的标题、语言列表和帮助说明使用中文；首次配置默认我的母语为简体中文、对方母语为西班牙语。已保存的自定义语言和翻译风格继续保留，旧英文默认风格说明自动改为中文。支持逐条维护本地商品、多图和封面、中文关键词的启停与 AI 建议、默认/备用支付方式、物流说明和可选客户群邀请。业务回复目标固定为墨西哥西班牙语。人工草稿按模块所选语言展示：选中文时先用中文放入输入框或图片说明，确认发送后才翻成西语；数字报价同样适用。价格可填写英文或西语多行报价说明，自动回复保留报价原文和换行，不添加币种。多类别合并含中文时整份草稿以中文确认，全西语配置则直接提供西语草稿。自动回复按源语言填入原生编辑框，提前缓存西语内容，点击原生发送时复用缓存译文并保留准确中文原文。
 
@@ -37,10 +41,10 @@ All keys live in `chrome.storage.local`. Nothing is sent anywhere except the AI 
 ## Install (developer mode)
 
 1. Clone this repo.
-2. `pnpm install && pnpm build` (Node 20.19+ or a current supported Node release).
+2. 推荐安装 Node.js 26（本轮使用 26.4.0 验证），通过 Corepack 使用 Yarn 4.18.0，执行 `yarn install --immutable`，然后执行 `VITE_HAOMAI_API_BASE_URL=http://127.0.0.1:8080/api/v1 yarn build`。其他受支持版本、Corepack 准备、完整服务端配置及扩展来源白名单见[本地调试](docs/LOCAL_DEBUG.md)。
 3. In Chrome, go to `chrome://extensions`, enable **Developer mode**, click **Load unpacked**, and select the `dist/` folder.
-4. Right-click the extension icon → **Options**. Pick your native language, your AI provider, paste an API key, edit the personality prompt to taste.
-5. Open `https://web.whatsapp.com` and send a message. The saved language settings apply when you send; typing alone never requests a translation.
+4. 点击工具栏弹窗的“登录好麦”，或右键扩展图标 → **Options** 打开完整工作台。提交登录或点击“获取验证码”时，允许 Chrome 提示的 API 主机访问权限；服务器地址已由维护者在构建时设置。
+5. 打开并登录 `https://web.whatsapp.com`，在自有测试账号中手动验证；扩展更新后还需刷新这个标签页。后台模式由 Go 统一处理工作台/APP 发出的消息翻译，旧版本地翻译规则不作为当前登录流程的配置项。
 
 ## How it works
 
@@ -88,9 +92,9 @@ Built with **Vite** + **@crxjs/vite-plugin** + **React 18** + **TypeScript**. Th
 
 ## Privacy
 
-- **No telemetry from this extension.** Nothing is logged to any server.
-- **API keys are stored locally** in `chrome.storage.local` — they never leave your machine except to the AI provider you've configured.
-- **Message text leaves your browser only when translated**, going directly to the provider's API endpoint you chose. WhatsApp itself doesn't see the AI provider in any way; it just sees a translated text body.
+- **后台业务模式**会将账号、消息和工作台操作发送给用户配置的好麦 API，并按服务端配置处理存储、AI 翻译和自动回复。图片与语音使用 OSS 短时授权上传，长期云凭据不进入客户端。
+- **旧独立模式 API keys** 的兼容存储保留在 `chrome.storage.local`；旧版相关请求面向用户配置的 AI 供应商，当前工作台不提供切换到该模式的入口。
+- **登录令牌**持久保存在扩展 Origin 的 IndexedDB，在 `chrome.storage.session` 中保留可信上下文缓存；同一扩展更新或浏览器重启可恢复有效会话。退出、撤销或凭据失效后仍须重新登录。服务端访问日志与业务数据留存由部署者配置，发布隐私政策需反映实际行为。
 - **Local history contains message text.** Exact sent originals and cached translations are saved in this Chrome profile's extension storage (not encrypted by this extension). They are not sent to the chat recipient or synced to another device. Console diagnostics log IDs/counts/status, not complete message bodies or API keys.
 - **Anti-ban hook** zeroes out the WAM `extentionIds`/`externalSources` fields so WhatsApp's telemetry doesn't enumerate your installed extensions.
 
@@ -98,12 +102,20 @@ This is **unofficial** and not affiliated with WhatsApp / Meta. Use it at your o
 
 ## Develop
 
+开发与完整测试推荐 Node.js `26`，本轮使用 `26.4.0`。包管理与 Web 后台统一使用 Yarn `4.18.0`，由各自 `package.json` 的 `packageManager` 固定；扩展独立维护自己的 `yarn.lock`。`.yarnrc.yml` 使用 `nodeLinker: node-modules`。若未安装 Corepack，可先执行 `npm install --global corepack@0.34.5`，该工具版本兼容推荐的 Node 26；npm 仅用于安装该工具，扩展依赖和脚本均由 Yarn 管理，已有兼容的 Corepack 无需重装或降级。
+
 ```bash
-pnpm install
-pnpm dev      # Vite dev server with HMR
-pnpm test     # simulated WhatsApp DOM + persistent storage + send-hook regression tests
-pnpm build    # production build into dist/
+corepack enable
+yarn --version  # 应为 4.18.0
+yarn install --immutable
+yarn dev --host localhost --port 5174 --strictPort  # UI HMR，避免与 Vue 的 5173 冲突
+yarn test     # simulated WhatsApp DOM + persistent storage + send-hook regression tests
+VITE_HAOMAI_API_BASE_URL=http://127.0.0.1:8080/api/v1 yarn build # 完整联调用 dist/
 ```
+
+`yarn dev` 和 `yarn build` 不要同时写同一个 `dist`。项目有 build 专用 WhatsApp MAIN-world 入口重写，原生消息链路请使用正式构建加载验收，详见[调试指南](docs/LOCAL_DEBUG.md)。发布构建需把 API 地址改为实际 HTTPS 域名，不能直接沿用本机地址。
+
+旧安装的临时兼容输出位于 `../wa-web-translate/dist`，其父目录是真实的、带 `.haomai-extension-bundle-only` 标记的发布目录，只存旧路径下的构建副本，不是源码仓库或符号链接。需要继续供旧实例使用时，先在本仓库构建，再显式执行 `python3 tools/sync_legacy_bundle.py --target ../wa-web-translate/dist`。工具校验目录和 SHA256、失败时恢复旧包，不读取浏览器存储、不重载扩展，也不是常规 build/test 的前置。详情见[本地调试](docs/LOCAL_DEBUG.md)。
 
 ### Verify translation in Chrome
 
@@ -111,11 +123,11 @@ After rebuilding and reloading the unpacked extension, configure **我的母语*
 
 Typing alone should produce no translation request. Sending a message should show `send translation start`, followed by `bridge response ok` and `send body rewritten`. The service worker console should show `sw request received`, `provider request start`, `DeepSeek response` with `ok: true`, `provider request success`, `output parsed`, and `sw response ready`. Receiving an uncached message produces its own history translation request; cached history does not.
 
-To inspect service-worker logs, open `chrome://extensions`, find **WA Web Translate**, click its **Service worker** link, and use the DevTools Console there. A successful request should have HTTP status `200`; an API or permission problem will appear as `provider request failed` with its status/error.
+To inspect service-worker logs, open `chrome://extensions`, find **好麦**, click its **Service worker** link, and use the DevTools Console there. In standalone mode, a successful provider request should have HTTP status `200`; an API or permission problem will appear as `provider request failed` with its status/error. 后台业务模式请同时检查 Go API、WebSocket 和来源账号状态，不能只看供应商请求日志。
 
 ### 验证聊天记录中的双语显示
 
-1. `pnpm build` 后，在 `chrome://extensions` 点击扩展的重新加载，然后刷新 WhatsApp 网页（否则旧 hook 仍然在运行）。保持加载同一个 `dist/` 扩展，不要卸载后重装，以免丢失本地历史。
+1. `yarn build` 后，在 `chrome://extensions` 点击扩展的重新加载，然后刷新 WhatsApp 网页（否则旧 hook 仍然在运行）。保持加载同一个 `dist/` 扩展，不要卸载后重装，以免丢失本地历史。
 2. 配置“我的母语”为中文、“对方的母语”为英语。连续输入、修改文字时，不应出现预览弹窗，也不应产生输入翻译请求；点击原发送按钮或按回车后，才翻译一次并发送。对方只收到英文；本机英文气泡下方用一条细实线分隔，再显示酒红色的准确中文原文。
 3. 对方发英文后，保留原来的英文气泡，用细实线分隔，下面显示酒红色中文译文。没有额外的语言标题或截图中的红色箭头/说明；原文/译文类型只在悬停提示中区分。重试按钮只影响本地翻译，不会发送消息。
 4. 切换聊天、滚动到历史消息，再刷新页面。对应的双语行应恢复；已缓存的入站消息日志应显示 `cacheHit: true`，不再重复调用 AI。
@@ -164,3 +176,48 @@ I build and maintain this in my spare time. If it makes your life easier, please
 ## License
 
 MIT.
+
+
+## 好麦公共工程基础
+
+2026-10-23：扩展界面名称改为好麦，popup 与 options 接入统一生成的主题和通用文案，默认跟随系统。现有 WhatsApp 消息桥、自动回复及本地配置行为继续保留。
+
+公共设计与协议源位于 `haomai-go/shared`；设计或协议更新时，由公共工程维护者同步生成结果到本仓库。`src/shared/generated` 随本仓库提交，正常安装、测试和构建只使用本仓库文件，不访问任何相邻仓库；不要手动修改生成文件。新后端环境与协议边界位于 `src/shared/haomai`，公共 UI 文案与主题位于 `src/shared/ui`。
+
+账号登录、注册、找回密码和服务器绑定已接入真实扩展工作台。后台业务模式由服务器保存供应商凭据；旧版直连 AI 配置与数据保留兼容，当前工作台已移除独立模式切换入口，后台模式不会启用端侧旧翻译和自动回复规则。
+
+本工程真正的工具栏 popup 使用 `src/popup/index.html`；完整设置由 `options_ui.open_in_tab=true` 打开。界面原型、框架选择与服务端部署配置见同级 `haomai-go/docs/TECHNICAL.md`。
+
+## 好麦后台业务模式
+
+默认进入好麦工作台，工具栏弹窗固定 360px 宽，提供来源状态、用量、消息、常用内容与手机入口；未登录入口统一为“登录好麦”。登录、注册、忘记密码和全部业务在独立扩展标签页完成，不显示 API 地址输入或独立模式切换。原来的商品、支付、物流、信任和常用语数据保持兼容。后台模式由服务器统一翻译、自动回复，端侧旧规则暂停，避免重复处理。
+
+1. 维护者在构建时传入公开 `VITE_HAOMAI_API_BASE_URL`（见[调试](docs/LOCAL_DEBUG.md)与[部署](docs/DEPLOYMENT.md)），统一设置当前包的 API 地址。`.env.example` 只是示例，不会自动加载。默认本机 `http://127.0.0.1:8080/api/v1`；远程地址必须 HTTPS。浏览器已保存的服务器地址仍优先于构建默认值；升级不自动覆盖，维护者需核对旧配置。
+2. 服务器 `http.allowed_origins` 必须填写实际 `chrome-extension://扩展ID`，包含 WebSocket origin。用户提交登录或点击“获取验证码”时，扩展沿用已配置地址启用后台模式，并申请对应 API 主机的访问权限；按 Chrome 提示允许即可。
+3. 使用 Chrome 116 或更新版本，执行 `yarn install --immutable`、`yarn build`，在 Chrome 扩展管理中加载 `dist/`。
+4. 登录好麦后打开 WhatsApp Web 并登录，真实账号标识同步到服务器。APP 使用相同好麦账号；手机入口生成有效期三分钟的真实绑定二维码，二维码令牌来自服务端。
+5. 图片、语音使用 OSS 上传授权、直传及完成校验；需先填写服务器 OSS 配置和 Bucket CORS（允许扩展来源及 PUT 所需签名请求头）。语音录制只在点击录音时请求麦克风权限，最长一分钟，可预听后发送。
+
+HTTP/WS 共用 camelCase 封装，WebSocket 使用一次性票据、`haomai.v1`、心跳、退避重连和 alarm 唤醒恢复。HTTP 401 进行单次合并刷新，暂时断网/503 不清除登录。访问令牌和刷新令牌保存在扩展 Origin 的 IndexedDB 及可信 `chrome.storage.session` 缓存，不交给 WhatsApp MAIN 世界、任意 content script 或 localStorage；主动退出会清除持久会话，避免重新启动后恢复旧登录。旧版仅在 session 中的凭据若在首次升级时已被 Chrome 清空，需重新登录一次，详见[升级说明](docs/LOCAL_DEBUG.md)。来自网页的中继仅允许固定平台观察与已关联发送结果，不接受任意 API 路径或 userId。
+
+平台入站和原生出站文字根据真实消息键同步；服务端分发与普通同步分开处理。发送前写入防重记录，WA 明确发送确认后回报；确认不确定时不会自动重发。采集及结果回报有按用户隔离的本地 outbox，重连后重试；重复分发只重报已保存的结果。历史加载不会触发新消息自动回复。
+
+工作台业务包括社交账号、会话与文字/单图/语音发送、类别拖拽排序、内容图文与关键词/自动回复、客户标签与跟进、AI 角色、反馈多图、套餐/订单、用量、设备会话、个人资料、修改密码与主题。服务器未填写的官网/下载地址明确提示未配置，支付渠道未配置时订单停在待支付，不制造成功状态。
+
+登录、注册、找回和修改密码统一不设最小长度，允许 `123456` 等短密码；拒绝空值或全为空白，实际密码不裁剪前后空格，按 UTF-8 编码限制为最多 72 字节。
+
+本地 `development` 可通过后端 `sms.development_code: '123456'` 使用固定验证码，不发送真实短信。注册或找回密码仍需先点击“获取验证码”，由服务端创建 `challengeId` 后再填写 `123456`；不能跳过获取步骤。该配置仅开发环境有效，生产仍使用真实阿里云短信。
+
+### 验证与实际联调边界
+
+`yarn test` 覆盖既有 75 项 WhatsApp/翻译/自动回复测试以及新增后台安全、协议、派发防重、账号输入和类别/反馈页面操作；`yarn build` 做 TypeScript 与生产打包。测试使用隔离 fixture，不向真实联系人发消息，不发送真实短信，不付款。
+
+真实 WhatsApp 的内部模块随版本可能变化；适配器找不到模块或未得到明确 ACK 时返回失败。实时采集覆盖文字、图片和语音；媒体使用 MsgModel 原生下载解密及已解密 Blob，最大20MiB，经隔离中继与后台重复验证后上传 OSS。模块不可用、下载失败、类型或大小不符会保留失败记录和重试入口；不改成假文本。APP/工作台主动发送的单图和语音已接到平台媒体适配器。实际账号、OSS、短信和 DeepSeek 联调需要用户填入外部配置后执行。
+
+媒体下载接口对照来源：[WA-JS v4.7.1 downloadMedia](https://github.com/wppconnect-team/wa-js/blob/v4.7.1/src/chat/functions/downloadMedia.ts)、[原生媒体发送签名](https://github.com/wppconnect-team/wa-js/blob/v4.7.1/src/chat/functions/sendFileMessage.ts)。项目保留自有适配层，没有注入整个第三方运行时。
+
+账号详情提供显式“导入最近消息”：最多读取当前登录来源账号最近100条加载到WhatsApp Store的消息，全部标记 historical=true，仅保留原文，不触发自动翻译、计费或自动回复；登录时不会自动执行导入。媒体导入同样有下载失败记录和重试。
+
+聊天媒体按 mediaId 重新签发下载链接：语音播放前校验有效期并刷新，图片失败可重新加载，避免页面长时间停留后沿用过期OSS地址。后台模式下，好麦工作台/APP发出的消息由服务器统一翻译；WhatsApp原生输入框直接发送的内容按原文发送并同步记录，独立模式保留原有原生发送翻译。
+
+好麦后端业务及本地启停偏好统一使用 `active`。升级读取旧 `enabled` 字段时保留开关状态和自定义数据；若两者同时存在，以 `active`（包括 `false`）为准。第三方供应商 API 仍使用其规定字段。消息接口保留每条消息独立的 `sourceLanguage`，缺失或 `null` 表示未知，不从会话语言推断历史记录；可选审计字段也随服务器响应透传。聊天正文和译文继续由服务端 MySQL 保存。

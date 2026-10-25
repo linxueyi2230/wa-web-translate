@@ -153,9 +153,9 @@ export function TranslationSettings({ config, onSave }: { config: Config; onSave
 
       <section className="opts-section">
         <h2>插件启用</h2>
-        <ToggleSwitch id="enabled" label="启用翻译插件" checked={config.enabled}
-          description={config.enabled ? '翻译及已开启的自动回复规则可以运行' : '翻译及自动回复已暂停'}
-          onChange={(enabled) => setAndSave({ enabled })} />
+        <ToggleSwitch id="active" label="启用翻译插件" checked={config.active}
+          description={config.active ? '翻译及已开启的自动回复规则可以运行' : '翻译及自动回复已暂停'}
+          onChange={(active) => setAndSave({ active })} />
         <div className="opts-help">
           更改开关后，请刷新 WhatsApp 网页使设置生效。
         </div>

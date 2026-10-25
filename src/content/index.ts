@@ -1,3 +1,5 @@
+import { installHaomaiRelay } from './haomai-connector';
+installHaomaiRelay();
 // Bridge between the MAIN-world page script and the service worker. This script runs
 // in the ISOLATED world so it has access to chrome.* APIs. It also injects the page
 // bundle as a real <script src> tag — that gives the script a proper base URL so its
@@ -118,6 +120,7 @@ window.addEventListener('pagehide', () => {
 // --- Store proxy: page world cannot use chrome.* directly. ---
 
 function pushStore(patch: { config?: Config }) {
+  if (patch.config) patch = { config: { ...patch.config, apiKeys: {} } }; // Never expose provider credentials to MAIN world.
   window.postMessage({ __waTransStore: true, kind: 'STORE_PUSH', ...patch }, '*');
 }
 
