@@ -13,9 +13,72 @@ import { confirmNativeSendResult, nativeMessageIds } from '../native-send-result
 import { chatKey, modelField } from '@/shared/whatsapp-keys';
 import { normalizeChatId, type OutgoingDraft } from '@/shared/message-history';
 import { sentMessageId } from './send';
+import { showSendNotice } from '../send-notice';
 
-const modules = new WeakSet<object>();
+const modules = new WeakMap<object, (...args: any[]) => any>();
 const preparations = new WeakSet<object>();
+
+// Ordinary uploads have no business draft owner, but their captions still need
+// the same send-time translation and failure handling as ordinary text.
+function decorateOrdinaryMedia(preparation: any): any {
+  if (!preparation || preparations.has(preparation)) return preparation;
+  if (typeof preparation.sendToChat !== 'function') {
+    if (getConfig().enabled) {
+      showSendNotice('图片发送接口已变化，无法安全翻译说明，请刷新页面后重试');
+      throw new Error('图片发送接口已变化，无法安全翻译说明');
+    }
+    return preparation;
+  }
+  const send = preparation.sendToChat;
+  const wrapped = async function (this: unknown, ...args: any[]) {
+    const packed = args.length === 1 && args[0]?.chat;
+    const chat = packed ? args[0].chat : args[0];
+    const options = packed ? args[0].options : args[1];
+    const caption = options?.caption;
+    const config = getConfig();
+    if (!config.enabled || typeof caption !== 'string' || !caption.trim()) return send.apply(this, args);
+    const chatId = chatKey(modelField(chat, 'id')) ?? chatKey(chat);
+    let draft: OutgoingDraft | undefined;
+    let marked = false;
+    let attempted = false;
+    try {
+      if (!chatId || !config.targetLang) throw new Error('无法确认图片收件人或目标语言');
+      draft = await prepareTranslatedOutgoing(caption, chatId, config.nativeLang || 'auto', config.targetLang);
+      if (!getConfig().enabled) throw new Error('翻译已关闭，已停止图片说明发送');
+      const next = args.slice();
+      const nextOptions = { ...options, caption: draft.translated };
+      if (packed) next[0] = { ...args[0], options: nextOptions };
+      else next[1] = nextOptions;
+      // Some WhatsApp versions route captions through the text send function.
+      registerAutomaticBusinessReply(chatId, draft.translated, draft.token);
+      marked = true;
+      attempted = true;
+      const result = await send.apply(this, next);
+      try { await finishOutgoing(draft.token, sentMessageId(result, chatId)); }
+      catch (error) { console.error('[wa-translate][media] sent, but original ID binding failed', error); }
+      return result;
+    } catch (error) {
+      if (draft && !attempted) cancelOutgoing(draft.token);
+      showSendNotice(attempted ? '图片发送状态不确定，请先检查聊天记录，勿重复发送'
+        : `未发送图片说明：${error instanceof Error ? error.message : '翻译失败，请重试'}`);
+      throw error;
+    } finally {
+      if (marked && chatId && draft) clearAutomaticBusinessReply(chatId, draft.translated);
+    }
+  };
+  try {
+    Object.defineProperty(wrapped, 'length', { value: send.length });
+    preparation.sendToChat = wrapped;
+    if (preparation.sendToChat !== wrapped) throw new Error('图片发送接口不可写');
+    preparations.add(preparation);
+  } catch (error) {
+    if (getConfig().enabled) {
+      showSendNotice('无法监听图片发送，无法安全翻译说明，请刷新页面后重试');
+      throw error;
+    }
+  }
+  return preparation;
+}
 
 // Install before pasting a business draft's files. Each preparation keeps its
 // own chat/source-language identity, including separate captions in an album.
@@ -24,7 +87,7 @@ export function installBusinessMediaSendHook(): boolean {
   const candidates = [tryRequire('WAWebPrepRawMedia'), tryRequire('WAWebMediaPrep')?.MediaPrep];
   for (const module of candidates) {
     if (!module || typeof module.prepRawMedia !== 'function') continue;
-    if (modules.has(module)) { available = true; continue; }
+    if (modules.get(module) === module.prepRawMedia) { available = true; continue; }
     const original = module.prepRawMedia;
     const wrapped = function (this: unknown, ...args: any[]) {
       const chatId = getActiveChatId();
@@ -35,7 +98,8 @@ export function installBusinessMediaSendHook(): boolean {
       const preparationGuard = attachment && owner ? nativeBusinessSendGuard(owner.chatId, owner.messageId) : undefined;
       const result = original.apply(this, args);
       const decorate = (preparation: any) => {
-        if (!owner || !preparation || preparations.has(preparation)) return preparation;
+        if (!owner) return decorateOrdinaryMedia(preparation);
+        if (!preparation || preparations.has(preparation)) return preparation;
         if (typeof preparation.sendToChat !== 'function') {
           if (owner.language === 'zh-CN' || isNativeBusinessSend(owner.chatId, owner.messageId)) throw new Error('图片发送接口已变化，已停止图片草稿，请人工处理');
           return preparation;
@@ -69,6 +133,7 @@ export function installBusinessMediaSendHook(): boolean {
               if (!recipient || normalizeChatId(recipient) !== owner.chatId || !options) throw new Error('无法确认图片草稿的收件人或说明字段，已停止发送');
               validateNative();
               const next = sendArgs.slice();
+              if (owner.language === 'es-MX' && typeof caption === 'string' && /\p{Script=Han}/u.test(caption)) throw new Error('西班牙语图片说明包含中文，已阻止发送，请先翻译或修改草稿');
               // Only nonempty Chinese captions need translation; uncaptioned
               // photos retain the same batch owner until the whole group finishes.
               if (owner.language === 'zh-CN' && typeof caption === 'string' && caption.trim() && !isAutomaticBusinessReply(owner.chatId, caption)) {
@@ -131,7 +196,7 @@ export function installBusinessMediaSendHook(): boolean {
     };
     try {
       module.prepRawMedia = wrapped;
-      if (module.prepRawMedia === wrapped) { modules.add(module); available = true; }
+      if (module.prepRawMedia === wrapped) { modules.set(module, wrapped); available = true; }
     } catch { /* An immutable module cannot safely send Chinese media drafts. */ }
   }
   return available;

@@ -514,6 +514,7 @@ test('send hook sends only the translation, saves input, and never hooks its nes
   let calls = 0;
   let sentBody;
   let translationFails = false;
+  let translationResult = 'How are you?';
   let sendFails = false;
   let origCalls = 0;
   const chat = { id: { _serialized: '123@c.us' }, msgs: { models: [] } };
@@ -534,7 +535,7 @@ test('send hook sends only the translation, saves input, and never hooks its nes
     if (data?.kind === 'TRANSLATE_REQUEST') {
       calls++;
       window.postMessage({ __waTrans: true, kind: 'TRANSLATE_RESULT', id: data.id, ok: !translationFails,
-        result: { translated: 'How are you?', source: 'zh-CN', target: 'en' }, error: 'mock provider failure' }, '*');
+        result: { translated: translationResult, source: 'zh-CN', target: 'en' }, error: 'mock provider failure' }, '*');
     }
   });
   const { storage } = engine(t, async () => assert.fail('not mounted'));
@@ -554,6 +555,22 @@ test('send hook sends only the translation, saves input, and never hooks its nes
   await assert.rejects(module.sendTextMsgToChat(chat, '第二条', {}), /provider failure/);
   assert.equal(sentBody, undefined);
   translationFails = false;
+  window.postMessage({ __waTransStore: true, kind: 'STORE_PUSH', config: { ...config, targetLang: 'es' } }, '*');
+  await wait();
+  for (const invalid of ['你好', 'Hola 你好']) {
+    translationResult = invalid;
+    sentBody = undefined;
+    await assert.rejects(module.sendTextMsgToChat(chat, '你好', {}), /翻译结果仍包含中文/);
+    assert.equal(sentBody, undefined);
+    assert.match(document.querySelector('#wa-translate-send-notice').textContent, /原文.*你好/s);
+  }
+  translationResult = 'How are you?';
+  window.postMessage({ __waTransStore: true, kind: 'STORE_PUSH', config: { ...config, targetLang: '' } }, '*');
+  await wait();
+  await assert.rejects(module.sendTextMsgToChat(chat, '测试', {}), /未设置目标语言/);
+  window.postMessage({ __waTransStore: true, kind: 'STORE_PUSH', config: { ...config, targetLang: 'es' } }, '*');
+  await wait();
+  installSendHook(); // Repeated installation must not translate twice.
   sendFails = true;
   await assert.rejects(module.sendTextMsgToChat(chat, '第三条', {}), /send rejection/);
   assert.equal(origCalls, 2); // Only one call to WhatsApp even when orig rejects.

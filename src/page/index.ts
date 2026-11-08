@@ -4,6 +4,7 @@
 import { waitTillReady, waitForModules } from './wa';
 import { installWamScrub } from './hooks/wam-scrub';
 import { installSendHook } from './hooks/send';
+import { installSendGuard } from './send-guard';
 import { requestSnapshot } from './store';
 import { installMessageMetadata } from './message-metadata';
 import { installBusinessAdapter } from './business-adapter';
@@ -21,6 +22,7 @@ console.info('[wa-translate] page-world script booted');
   // Typing must NOT trigger translations or mount a composer preview. The content
   // script decorates message history; this hook translates only when WA sends.
   requestSnapshot();
+  installSendGuard();
   installMessageMetadata();
   console.info('[wa-translate] translation mode: send and message history only');
 

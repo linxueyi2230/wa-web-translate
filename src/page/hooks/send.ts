@@ -10,6 +10,7 @@ import { tryRequire, getActiveChatId } from '../wa';
 import { getConfig } from '../store';
 import { cancelOutgoing, finishOutgoing } from '../history';
 import { prepareTranslatedOutgoing } from '../outgoing-translation';
+import { showSendNotice } from '../send-notice';
 import { normalizeChatId, parseMessageId, comparableText, type OutgoingDraft } from '@/shared/message-history';
 import { chatKey, messageKey, modelField } from '@/shared/whatsapp-keys';
 import { businessDraftLanguage, businessDraftMessageId, notifyBusinessDraftSent, notifyBusinessMessageSent, notifyBusinessDraftSendStarted, notifyBusinessDraftSendFailed, nativeBusinessSendGuard, preparedNativeTranslation, confirmNativeBusinessSend, businessMediaDraft, isAutomaticBusinessReply, isNativeBusinessSend } from '../business-drafts';
@@ -30,6 +31,7 @@ const CANDIDATES: Candidate[] = [
   // Fallbacks if WhatsApp renames in the future:
   { module: 'WAWebSendTextMsgChatAction', function: 'addAndSendTextMsg', bodyArgIndex: 1 },
 ];
+const installedHooks = new WeakMap<object, Map<string, (...args: any[]) => any>>();
 let sendHookReady = false;
 export const isTextSendHookReady = (): boolean => sendHookReady;
 
@@ -42,8 +44,14 @@ export function installSendHook(): Array<{ module: string; function: string }> {
     if (hookedModules.has(c.module)) continue;
     const mod = tryRequire(c.module);
     if (!mod || typeof mod[c.function] !== 'function') continue;
+    const existing = installedHooks.get(mod)?.get(c.function);
+    if (existing && mod[c.function] === existing) {
+      hookedModules.add(c.module);
+      installed.push({ module: c.module, function: c.function });
+      continue;
+    }
     const orig = mod[c.function].bind(mod);
-    mod[c.function] = async (...args: any[]) => {
+    const wrapped = async (...args: any[]) => {
       const businessChat = chatKey(modelField(args[0], 'id')) ?? chatKey(args[0]) ?? getActiveChatId();
       const sentBody = args[c.bodyArgIndex];
       const businessMessageId = businessChat && typeof sentBody === 'string' ? businessDraftMessageId(businessChat, sentBody) : undefined;
@@ -61,6 +69,7 @@ export function installSendHook(): Array<{ module: string; function: string }> {
         draft = rewritten.draft;
       } catch (err) {
         console.error('[wa-translate][send] translation/original-save failed; original NOT sent', err);
+        showSendNotice(`未发送：${err instanceof Error ? err.message : '翻译失败，请重试'}${typeof sentBody === 'string' ? `\n\n原文（如输入框已清空，可复制后重试）：\n${sentBody}` : ''}`);
         if (businessChat && businessMessageId) notifyBusinessDraftSendFailed(businessChat, businessMessageId,
           err instanceof Error ? `未发送：${err.message}` : '翻译失败，未发送，请恢复草稿后重试');
         throw err;
@@ -111,6 +120,13 @@ export function installSendHook(): Array<{ module: string; function: string }> {
       }
       return result;
     };
+    try {
+      mod[c.function] = wrapped;
+      if (mod[c.function] !== wrapped) continue;
+    } catch { continue; }
+    let hooks = installedHooks.get(mod);
+    if (!hooks) { hooks = new Map(); installedHooks.set(mod, hooks); }
+    hooks.set(c.function, wrapped);
     hookedModules.add(c.module);
     installed.push({ module: c.module, function: c.function });
     console.info(`[wa-translate] send hook installed on ${c.module}.${c.function}`);
@@ -118,7 +134,7 @@ export function installSendHook(): Array<{ module: string; function: string }> {
   if (installed.length === 0) {
     console.warn('[wa-translate] no candidate send module found; outbound translation disabled');
   }
-  sendHookReady ||= installed.length > 0;
+  sendHookReady = installed.some((entry) => entry.module === 'WAWebSendTextMsgChatAction');
   return installed;
 }
 
@@ -162,6 +178,7 @@ async function maybeRewrite(args: any[], c: Candidate): Promise<{ args: any[]; d
   const chatId = chatKey(modelField(args[0], 'id')) ?? chatKey(args[0]) ?? getActiveChatId();
   const draftLanguage = chatId ? businessDraftLanguage(chatId, body) : undefined;
   if (draftLanguage === 'es-MX') {
+    if (/\p{Script=Han}/u.test(body)) throw new Error('西班牙语草稿包含中文，已阻止发送，请先翻译或修改草稿');
     return { args }; // Already prepared in Spanish, including edits in the native composer.
   }
 
@@ -173,8 +190,7 @@ async function maybeRewrite(args: any[], c: Candidate): Promise<{ args: any[]; d
   const targetLang = draftLanguage === 'zh-CN' ? 'es' : config.targetLang;
   const sourceLang = draftLanguage === 'zh-CN' ? 'zh-CN' : config.nativeLang || 'auto';
   if (!targetLang) {
-    console.info('[wa-translate][send] skipped: target language not configured');
-    return { args };
+    throw new Error('未设置目标语言，请先在设置中选择目标语言');
   }
 
   console.info('[wa-translate][send] translation start', {

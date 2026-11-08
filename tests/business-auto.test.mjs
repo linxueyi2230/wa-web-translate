@@ -137,7 +137,7 @@ business.trustText = 'Compra segura; verificamos el pago antes del envío.';
 business.products = [{ id: 'one', name: 'Modelo A', model: 'DN166', description: 'Edición conmemorativa', price: '250', currency: 'MXN', images: [], coverImageId: '', keywords: DEFAULT_PRODUCT_KEYWORDS.map((text) => ({ id: text, text, enabled: true, source: 'default' })), enabled: true, updatedAt: Date.now() }];
 records['businessData:v1'] = structuredClone(business);
 const translations = [];
-const controller = new BusinessReplies(async (request) => { translations.push(request.text); return { translated: request.target === 'es' ? `ES ${request.text}` : request.text, source: 'zh-CN', target: request.target }; });
+const controller = new BusinessReplies(async (request) => { translations.push(request.text); return { translated: request.target === 'es' ? 'Hola, ¿qué producto le interesa?' : request.text, source: 'zh-CN', target: request.target }; });
 controller.start();
 let incomingSequence = 0;
 async function incoming(text, chat = chatA) {
@@ -222,6 +222,12 @@ test('a failed photo leaves the batch for manual inspection and never retries an
   assert.equal(nativeClicks.length, before + 1);
   assert.equal(sent.length, beforeSent + 1);
   rejectPhoto = -1;
+  // The failure intentionally leaves a manual-review draft. Discard it as a
+  // user would, so a later scenario cannot reopen its photo preview.
+  await controller.finishDraft(next.record(), 'dismissed');
+  await until(() => !controller.autoBusy && controller.inserting.size === 0);
+  document.querySelector('#media-preview [aria-label="Close"]')?.click();
+  await until(() => !document.querySelector('#media-preview'));
 });
 
 test('Chinese captions reuse their prepared translation once and keep English quote text intact', async () => {
@@ -424,7 +430,7 @@ test('Chinese greeting content still translates once and reuses the prepared rep
     await until(() => next.record().status === 'sent');
     assert.equal(next.record().translated, '你好');
     assert.equal(next.record().reply, '您好，需要了解哪款商品？');
-    assert.equal(sent.at(-1).body, 'ES 您好，需要了解哪款商品？');
+    assert.equal(sent.at(-1).body, 'Hola, ¿qué producto le interesa?');
     assert.equal(nativeClicks.length, beforeClicks + 1);
     const original = events.filter((event) => event.kind === 'PREPARE_OUTGOING').slice(beforeHistory)[0];
     assert.equal(original?.draft.original, next.record().reply);

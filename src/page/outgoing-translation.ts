@@ -12,6 +12,11 @@ export async function prepareTranslatedOutgoing(
 ): Promise<OutgoingDraft> {
   const result = preparedTranslation ? { translated: preparedTranslation, source: source ?? 'unknown' } : await translate({ text, source, target });
   if (!result.translated?.trim()) throw new Error('翻译结果为空，未发送原文');
+  // Spanish recipients cannot read an untranslated Chinese response. Apply the
+  // same check to cached/prepared translations and media captions before saving.
+  if (/^es(?:-|$)/i.test(target) && /\p{Script=Han}/u.test(text) && /\p{Script=Han}/u.test(result.translated)) {
+    throw new Error('翻译结果仍包含中文，已阻止发送，请检查译文或稍后重试');
+  }
   const draft: OutgoingDraft = {
     token: newRpcId(), chatId, original: text, translated: result.translated,
     source: !source || source === 'auto' ? result.source : source, target, createdAt: Date.now(),

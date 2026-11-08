@@ -2,14 +2,33 @@ import type { Config, Provider } from '@/shared/types';
 
 export class MissingApiKeyError extends Error {
   constructor(public provider: Provider) {
-    super(`Missing API key for ${provider}. Configure it in the extension options.`);
+    super(`未配置 ${provider} API Key，请在扩展设置中填写。`);
   }
 }
 
 export class ProviderError extends Error {
   constructor(public provider: Provider, public status: number, public body: string) {
-    super(`${provider} API error ${status}: ${body.slice(0, 200)}`);
+    super(formatProviderError(provider, status, body));
   }
+}
+
+function formatProviderError(provider: Provider, status: number, body: string): string {
+  // Keep the provider's details (including its request ID) for troubleshooting,
+  // but cap the response so a gateway's HTML error page cannot overwhelm the UI.
+  const details = body.trim().slice(0, 1000);
+  const original = `${provider} API error ${status}${details ? `: ${details}` : ''}`;
+  if (provider !== 'deepseek') return original;
+
+  const explanations: Record<number, string> = {
+    400: 'DeepSeek 请求无效，请检查模型和请求内容。',
+    401: 'DeepSeek API Key 无效或验证失败，请检查扩展设置。',
+    402: 'DeepSeek 账户余额不足，请前往 DeepSeek 平台充值后重试。',
+    422: 'DeepSeek 无法处理请求，请检查模型和请求内容。',
+    429: 'DeepSeek 请求过于频繁，请稍后重试。',
+    500: 'DeepSeek 服务发生错误，请稍后重试。',
+    503: 'DeepSeek 服务暂时不可用，请稍后重试。',
+  };
+  return explanations[status] ? `${explanations[status]}\n${original}` : original;
 }
 
 export interface CallArgs {
